@@ -405,8 +405,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Verify installer + real install / uninstall test
+        timeout-minutes: 20
         run: |
           $ErrorActionPreference = "Stop"
+          function RunSetup ($file, [string[]] $argList, $log) {
+            # bounded wait: a hung (e.g. dialog-blocked) installer fails the step with its log instead of hanging the job
+            $proc = Start-Process $file -ArgumentList $argList -PassThru
+            if (-not $proc.WaitForExit(300000)) {
+              "TIMEOUT after 5 min: $file $argList"
+              if ($log -and (Test-Path $log)) { Get-Content $log -Tail 120 }
+              Get-Process | Where-Object { $_.ProcessName -match 'unins|setup|\.tmp|BANKMASTER' } | Format-Table ProcessName, Id, MainWindowTitle -AutoSize | Out-String
+              Stop-Process $proc -Force -ErrorAction SilentlyContinue
+              exit 1
+            }
+            return $proc.ExitCode
+          }
           $R = "win_installer_report.txt"
           $exe = Get-Item "BANKMASTER\dist\BANKMASTER-BY-KALOX-2.0.0-Windows-x64-Setup.exe"
           $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
@@ -420,9 +433,9 @@ jobs:
           function Snap { @("<snapshot>") + @(Get-ChildItem $vst, (Join-Path $env:ProgramFiles "KALOX"), (Join-Path $env:ProgramFiles "Kalox Audio") -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object FullName | Sort-Object) }
           $before = Snap
           "== silent install (components vst3,standalone)" | Tee-Object -FilePath $R -Append
-          $p = Start-Process $exe.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=vst3,standalone',"/LOG=$pwd\install.log" -Wait -PassThru
-          "setup exit code: $($p.ExitCode)" | Tee-Object -FilePath $R -Append
-          if ($p.ExitCode -ne 0) { exit 1 }
+          $code = RunSetup $exe.FullName @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=vst3,standalone',"/LOG=$pwd\install.log") "$pwd\install.log"
+          "setup exit code: $code" | Tee-Object -FilePath $R -Append
+          if ($code -ne 0) { exit 1 }
           $after = Snap
           $added = @(Compare-Object $before $after | Where-Object SideIndicator -eq '=>' | ForEach-Object InputObject)
           "files added:" | Tee-Object -FilePath $R -Append
@@ -444,8 +457,8 @@ jobs:
           if ($val -notmatch " 0 tests failed") { exit 1 }
 
           "== silent uninstall" | Tee-Object -FilePath $R -Append
-          $u = Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
-          "uninstaller exit code: $($u.ExitCode)" | Tee-Object -FilePath $R -Append
+          $ucode = RunSetup "$app\unins000.exe" @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$pwd\uninstall.log") "$pwd\uninstall.log"
+          "uninstaller exit code: $ucode" | Tee-Object -FilePath $R -Append
           for ($i = 0; $i -lt 60 -and ((Test-Path "$vst\BANKMASTER.vst3") -or (Test-Path $app)); $i++) { Start-Sleep 1 }
           $final = Snap
           $diff = @(Compare-Object $before $final)
@@ -464,17 +477,30 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: V1 x V2 audio null test (VST3) and real upgrade 1.0 -> 2.0
+        timeout-minutes: 20
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          function RunSetup ($file, [string[]] $argList, $log) {
+            # bounded wait: a hung (e.g. dialog-blocked) installer fails the step with its log instead of hanging the job
+            $proc = Start-Process $file -ArgumentList $argList -PassThru
+            if (-not $proc.WaitForExit(300000)) {
+              "TIMEOUT after 5 min: $file $argList"
+              if ($log -and (Test-Path $log)) { Get-Content $log -Tail 120 }
+              Get-Process | Where-Object { $_.ProcessName -match 'unins|setup|\.tmp|BANKMASTER' } | Format-Table ProcessName, Id, MainWindowTitle -AutoSize | Out-String
+              Stop-Process $proc -Force -ErrorAction SilentlyContinue
+              exit 1
+            }
+            return $proc.ExitCode
+          }
           $R = "upgrade_and_null_test_windows.txt"
           $HC = ".\build\bankmaster_hostcheck_artefacts\Release\bankmaster_hostcheck.exe"
           $vst = Join-Path $env:CommonProgramFiles "VST3\BANKMASTER.vst3"
           $v1 = Get-ChildItem v1setup\*.exe | Select-Object -First 1
           "1.0 installer: $($v1.Name) sha256 $((Get-FileHash $v1.FullName).Hash.ToLower())" | Tee-Object -FilePath $R
-          $p = Start-Process $v1.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=vst3,standalone' -Wait -PassThru
-          "1.0 setup exit code: $($p.ExitCode)" | Tee-Object -FilePath $R -Append
-          if ($p.ExitCode -ne 0) { exit 1 }
+          $code = RunSetup $v1.FullName @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=vst3,standalone',"/LOG=$pwd\install_v1.log") "$pwd\install_v1.log"
+          "1.0 setup exit code: $code" | Tee-Object -FilePath $R -Append
+          if ($code -ne 0) { exit 1 }
           if (-not (Test-Path (Join-Path $env:ProgramFiles "KALOX\BANKMASTER\BANKMASTER.exe"))) { "1.0 standalone missing"; exit 1 }
           & $HC describe $vst | Tee-Object -FilePath v1_vst3_description.txt | Tee-Object -FilePath $R -Append
           & $HC render $vst nt_v1_vst3_x64 | Out-Null
@@ -482,9 +508,9 @@ jobs:
 
           "== upgrade: 2.0.0 over 1.0.0" | Tee-Object -FilePath $R -Append
           $v2 = Get-Item "BANKMASTER\dist\BANKMASTER-BY-KALOX-2.0.0-Windows-x64-Setup.exe"
-          $p = Start-Process $v2.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=vst3,standalone',"/LOG=$pwd\upgrade.log" -Wait -PassThru
-          "2.0 setup exit code: $($p.ExitCode)" | Tee-Object -FilePath $R -Append
-          if ($p.ExitCode -ne 0) { exit 1 }
+          $code = RunSetup $v2.FullName @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=vst3,standalone',"/LOG=$pwd\upgrade.log") "$pwd\upgrade.log"
+          "2.0 setup exit code: $code" | Tee-Object -FilePath $R -Append
+          if ($code -ne 0) { exit 1 }
           $key = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{951C821C-D559-4BEF-BC26-6822C33BB554}_is1"
           $u = Get-ItemProperty $key
           $u | Format-List DisplayName,DisplayVersion,Publisher,InstallLocation | Out-String | Tee-Object -FilePath $R -Append
@@ -506,10 +532,10 @@ jobs:
           $nullOk = $LASTEXITCODE
 
           "== uninstall 2.0.0" | Tee-Object -FilePath $R -Append
-          $u2 = Start-Process (Join-Path $env:ProgramFiles "Kalox Audio\BANKMASTER\unins000.exe") -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          $u2code = RunSetup (Join-Path $env:ProgramFiles "Kalox Audio\BANKMASTER\unins000.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$pwd\uninstall_v2.log") "$pwd\uninstall_v2.log"
           for ($i = 0; $i -lt 60 -and (Test-Path $vst); $i++) { Start-Sleep 1 }
           if ((Test-Path $vst) -or (Test-Path (Join-Path $env:ProgramFiles "Kalox Audio")) -or (Test-Path $key)) { "not clean after uninstall"; exit 1 }
-          "system clean after uninstall (exit code $($u2.ExitCode))" | Tee-Object -FilePath $R -Append
+          "system clean after uninstall (exit code $u2code)" | Tee-Object -FilePath $R -Append
           exit $nullOk
 
       - name: Upload Windows installer
@@ -527,8 +553,7 @@ jobs:
           name: BANKMASTER-Windows-validation-logs
           path: |
             *.txt
-            install.log
-            upgrade.log
+            *.log
             snapshots/*.png
             nt_*/*.txt
 
