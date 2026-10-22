@@ -459,7 +459,7 @@ jobs:
           "== silent uninstall" | Tee-Object -FilePath $R -Append
           $ucode = RunSetup "$app\unins000.exe" @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$pwd\uninstall.log") "$pwd\uninstall.log"
           "uninstaller exit code: $ucode" | Tee-Object -FilePath $R -Append
-          for ($i = 0; $i -lt 60 -and ((Test-Path "$vst\BANKMASTER.vst3") -or (Test-Path $app)); $i++) { Start-Sleep 1 }
+          for ($i = 0; $i -lt 120 -and ((Test-Path "$vst\BANKMASTER.vst3") -or (Test-Path $app) -or (Test-Path $key)); $i++) { Start-Sleep 1 }
           $final = Snap
           $diff = @(Compare-Object $before $final)
           if ($diff.Count -gt 0) { "file system differs after uninstall:"; $diff; exit 1 }
@@ -533,8 +533,10 @@ jobs:
 
           "== uninstall 2.0.0" | Tee-Object -FilePath $R -Append
           $u2code = RunSetup (Join-Path $env:ProgramFiles "Kalox Audio\BANKMASTER\unins000.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$pwd\uninstall_v2.log") "$pwd\uninstall_v2.log"
-          for ($i = 0; $i -lt 60 -and (Test-Path $vst); $i++) { Start-Sleep 1 }
-          if ((Test-Path $vst) -or (Test-Path (Join-Path $env:ProgramFiles "Kalox Audio")) -or (Test-Path $key)) { "not clean after uninstall"; exit 1 }
+          # the Inno uninstaller re-launches itself from %TEMP% and finishes in the background: wait for every trace
+          function Leftovers { @($vst, (Join-Path $env:ProgramFiles "Kalox Audio"), (Join-Path $env:ProgramFiles "KALOX"), $key, "HKLM:\SOFTWARE\Kalox Audio\BANKMASTER") | Where-Object { Test-Path $_ } }
+          for ($i = 0; $i -lt 120 -and @(Leftovers).Count -gt 0; $i++) { Start-Sleep 1 }
+          if (@(Leftovers).Count -gt 0) { "not clean after uninstall:"; Leftovers; exit 1 }
           "system clean after uninstall (exit code $u2code)" | Tee-Object -FilePath $R -Append
           exit $nullOk
 
