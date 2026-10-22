@@ -98,6 +98,7 @@ String describe (const juce::PluginDescription& d)
     return s;
 }
 
+/** Parameter identity: ID, name, normalised default, steps, bool (must never change between versions). */
 String parameterDump (juce::AudioPluginInstance& p)
 {
     String s;
@@ -106,8 +107,17 @@ String parameterDump (juce::AudioPluginInstance& p)
         String id;
         if (auto* h = dynamic_cast<juce::HostedAudioProcessorParameter*> (prm)) id = h->getParameterID();
         s << id << "|" << prm->getName (64) << "|" << String (prm->getDefaultValue(), 6) << "|" << prm->getNumSteps()
-          << "|" << (prm->isBoolean() ? 1 : 0) << "|" << prm->getText (prm->getDefaultValue(), 64) << "\n";
+          << "|" << (prm->isBoolean() ? 1 : 0) << "\n";
     }
+    return s;
+}
+
+/** Display text of every parameter at its default (presentation only). */
+String parameterTexts (juce::AudioPluginInstance& p)
+{
+    String s;
+    for (auto* prm : p.getParameters())
+        s << prm->getName (64) << "|" << prm->getText (prm->getDefaultValue(), 64) << "\n";
     return s;
 }
 
@@ -139,6 +149,7 @@ int render (const String& pluginPath, const juce::File& outDir, const juce::File
         {
             outDir.getChildFile ("description.txt").replaceWithText (describe (desc));
             outDir.getChildFile ("parameters.txt").replaceWithText (parameterDump (*p));
+            outDir.getChildFile ("parameter_texts.txt").replaceWithText (parameterTexts (*p));
         }
         if (sc.program >= 0) p->setCurrentProgram (sc.program);
         if (sc.random)
@@ -211,6 +222,26 @@ int compare (const juce::File& a, const juce::File& b)
     };
     same ("parameters.txt");
     same ("random_state_values.txt");
+    {
+        // display texts: the only accepted change is the removal of the negative zero ("-0.00 dB" -> "0.00 dB")
+        juce::StringArray ta, tb;
+        ta.addLines (a.getChildFile ("parameter_texts.txt").loadFileAsString());
+        tb.addLines (b.getChildFile ("parameter_texts.txt").loadFileAsString());
+        int changed = 0, bad = ta.size() != tb.size() || ta.isEmpty() ? 1 : 0;
+        for (int i = 0; i < juce::jmin (ta.size(), tb.size()); ++i)
+            if (ta[i] != tb[i])
+            {
+                const auto va = ta[i].fromFirstOccurrenceOf ("|", false, false), vb = tb[i].fromFirstOccurrenceOf ("|", false, false);
+                const bool negZero = ta[i].upToFirstOccurrenceOf ("|", false, false) == tb[i].upToFirstOccurrenceOf ("|", false, false)
+                                  && va == "-" + vb && vb.initialSectionContainingOnly ("0.").removeCharacters ("0.").isEmpty()
+                                  && vb.initialSectionContainingOnly ("0.").isNotEmpty();
+                std::printf ("    text change: \"%s\" -> \"%s\" %s\n", ta[i].toRawUTF8(), tb[i].toRawUTF8(), negZero ? "(negative zero removed)" : "(UNEXPECTED)");
+                ++changed;
+                if (! negZero) ++bad;
+            }
+        std::printf ("%-34s %s\n", "parameter_texts.txt", bad ? "DIFFERENT" : changed ? "identical except the negative-zero fix" : "identical");
+        if (bad) ++failures;
+    }
     for (const auto& sc : scenarios())
     {
         same (sc.name + ".txt");   // latency + length

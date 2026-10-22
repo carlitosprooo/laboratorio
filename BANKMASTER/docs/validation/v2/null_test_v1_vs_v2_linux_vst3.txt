@@ -1,5 +1,6 @@
 parameters.txt                     identical
 random_state_values.txt            identical
+parameter_texts.txt                identical
 default_48k_512.txt                identical
 default_48k_512.f32                BIT-IDENTICAL  samples 1152000  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -0.13 dBFS
 default_44k1_256.txt               identical
