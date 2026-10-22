@@ -1,5 +1,5 @@
 Started validating: /home/user/laboratorio/BANKMASTER/build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3
-Random seed: 0x5ff7240
+Random seed: 0x7d5ac7b
 Validation started
 Strictness level: 10
 -----------------------------------------------------------------
