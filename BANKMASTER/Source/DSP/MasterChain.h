@@ -77,7 +77,7 @@ public:
         inSm.reset (fs, 0.05); outSm.reset (fs, 0.05); bypassSm.reset (fs, 0.03);
         for (auto& m : modMix) m.reset (fs, 0.03);
         declickStep = (float) (1.0 / (0.012 * fs)); // 12 ms fades
-        inMeter.prepare (fs); outMeter.prepare (fs); loud.prepare (fs);
+        inMeter.prepare (fs); outMeter.prepare (fs); loud.prepare (fs); inLoud.prepare (fs);
         reset();
     }
 
@@ -96,7 +96,7 @@ public:
         outSm.setCurrentAndTarget (dbToGain (params.outputGainDb));
         bypassSm.setCurrentAndTarget (params.masterBypass ? 0.0f : 1.0f);
         for (int m = 0; m < kNumModules; ++m) modMix[m].setCurrentAndTarget (params.moduleOn[m] ? 1.0f : 0.0f);
-        inMeter.reset(); outMeter.reset(); loud.reset();
+        inMeter.reset(); outMeter.reset(); loud.reset(); inLoud.reset();
         declickState = Declick::Idle; declickGain = 1.0f;
     }
 
@@ -150,6 +150,8 @@ public:
     LevelMeter& getInputMeter() noexcept { return inMeter; }
     LevelMeter& getOutputMeter() noexcept { return outMeter; }
     LoudnessMeter& getLoudness() noexcept { return loud; }
+    /** Loudness of the raw input (before the INPUT gain) — used by INPUT LEARN. */
+    LoudnessMeter& getInputLoudness() noexcept { return inLoud; }
     const MasterEQ& getEq() const noexcept { return eq; }
     float getCompGainReduction() const noexcept { return comp.getGainReductionDb(); }
     float getLimGainReduction() const noexcept { return lim.getGainReductionDb(); }
@@ -250,6 +252,7 @@ private:
                 if (! std::isfinite (d[c][i])) d[c][i] = 0.0f;
 
         for (int c = 0; c < numCh; ++c) std::copy (d[c], d[c] + n, dryIn[c].data());
+        inLoud.process (d, numCh, n);   // raw input loudness (before INPUT gain) for INPUT LEARN
 
         for (int i = 0; i < n; ++i)
         {
@@ -318,7 +321,7 @@ private:
     int modLatency[kNumModules] {};
     LinearSmoother inSm, outSm, bypassSm, modMix[kNumModules];
     LevelMeter inMeter, outMeter;
-    LoudnessMeter loud;
+    LoudnessMeter loud, inLoud;
     Structure active;
     bool structureValid = false, pendingStructure = false;
     Declick declickState = Declick::Idle;

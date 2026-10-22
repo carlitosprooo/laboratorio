@@ -98,7 +98,10 @@ private:
 
 /** BS.1770-style 4x estimator (metering). */
 using TruePeakInterpolator = TruePeakInterpolatorT<4, 16>;
-/** Higher-precision 8x estimator used by the limiter's true-peak safety stage. */
+/** Accurate 8x estimator with parabolic refinement used by the dBTP meters. */
+using TruePeakInterpolatorMeter = TruePeakInterpolatorT<8, 64, 1000>;
+/** Higher-precision 8x estimator used by the limiter's true-peak safety stage
+    (cut-off 3 % above Nyquist: errs on the safe side for content right below fs/2). */
 using TruePeakInterpolatorHQ = TruePeakInterpolatorT<8, 64, 1030>;
 
 } // namespace bm

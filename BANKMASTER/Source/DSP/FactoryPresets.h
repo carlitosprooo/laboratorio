@@ -3,7 +3,10 @@
 // KALOX MASTER — ORIGINAL reproduces the parameters read from the reference
 // screenshots (Pro-Q 4 / Saturn 2 / Pro-C 2 / Pro-L 2). Values marked EST are
 // estimates (knob positions / curve fitting) — see docs/PARAMETERS.md.
-// All other presets are adjustable starting points, not automatic masters.
+// All other presets are adjustable starting points, not automatic masters. Their
+// limiter drive was calibrated for a mix at the INPUT LEARN reference (-20 LUFS
+// integrated): AFRO ~ -9, DEEP ~ -10, TECH ~ -8.5, CLUB ~ -7.5, TRANSPARENT ~ -12,
+// CUSTOM ~ -14 LUFS-I on the test material (results vary with the music).
 #pragma once
 
 #include "MasterChain.h"
@@ -93,8 +96,8 @@ namespace presets
         p.eq.bands[4] = band (BandType::HighShelf, 12000.0f, 1.5f, 1.0f, 1);
         p.sat.drivePct = 18.0f; p.sat.mixPct = 35.0f;
         p.comp.thresholdDb = -20.0f; p.comp.ratio = 1.8f; p.comp.kneeDb = 18.0f;
-        p.comp.attackMs = 35.0f; p.comp.releaseMs = 120.0f; p.comp.autoRelease = true; p.comp.autoGain = false;
-        p.lim.inputGainDb = 9.0f; p.lim.releaseMs = 300.0f; p.lim.lookaheadMs = 1.2f;
+        p.comp.attackMs = 35.0f; p.comp.releaseMs = 120.0f; p.comp.autoRelease = true; p.comp.autoGain = true;
+        p.lim.inputGainDb = 10.5f; p.lim.releaseMs = 300.0f; p.lim.lookaheadMs = 1.2f;
         return p;
     }
 
@@ -107,8 +110,8 @@ namespace presets
         p.eq.bands[3] = dynBand (900.0f, 0.0f, 1.6f, -1.0f, -30.0f);
         p.eq.bands[4] = band (BandType::HighShelf, 10000.0f, 0.5f, 1.0f, 1);
         p.sat.style = SatStyle::WarmTube; p.sat.drivePct = 22.0f; p.sat.mixPct = 30.0f;
-        p.comp.thresholdDb = -20.0f; p.comp.ratio = 1.6f; p.comp.attackMs = 40.0f; p.comp.releaseMs = 200.0f; p.comp.autoGain = false;
-        p.lim.inputGainDb = 8.0f; p.lim.releaseMs = 500.0f;
+        p.comp.thresholdDb = -20.0f; p.comp.ratio = 1.6f; p.comp.attackMs = 40.0f; p.comp.releaseMs = 200.0f; p.comp.autoGain = true;
+        p.lim.inputGainDb = 10.0f; p.lim.releaseMs = 500.0f;
         return p;
     }
 
@@ -122,8 +125,8 @@ namespace presets
         p.eq.bands[4] = band (BandType::HighShelf, 9000.0f, 1.5f, 1.0f, 1);
         p.sat.style = SatStyle::Tape; p.sat.drivePct = 25.0f; p.sat.mixPct = 35.0f;
         p.comp.thresholdDb = -16.0f; p.comp.ratio = 2.5f; p.comp.kneeDb = 12.0f;
-        p.comp.attackMs = 20.0f; p.comp.releaseMs = 80.0f; p.comp.autoGain = false;
-        p.lim.style = LimStyle::Punchy; p.lim.inputGainDb = 11.0f; p.lim.releaseMs = 250.0f;
+        p.comp.attackMs = 20.0f; p.comp.releaseMs = 80.0f; p.comp.autoGain = true;
+        p.lim.style = LimStyle::Punchy; p.lim.inputGainDb = 9.0f; p.lim.releaseMs = 250.0f;
         return p;
     }
 
@@ -137,8 +140,8 @@ namespace presets
         p.eq.bands[4] = band (BandType::HighShelf, 12000.0f, 1.0f, 1.0f, 1);
         p.sat.style = SatStyle::WarmTube; p.sat.drivePct = 28.0f; p.sat.mixPct = 40.0f;
         p.comp.thresholdDb = -18.0f; p.comp.ratio = 2.5f; p.comp.attackMs = 15.0f; p.comp.releaseMs = 80.0f;
-        p.comp.autoRelease = true; p.comp.autoGain = false;
-        p.lim.style = LimStyle::Punchy; p.lim.inputGainDb = 12.0f; p.lim.releaseMs = 200.0f; p.lim.ceilingDb = -0.3f;
+        p.comp.autoRelease = true; p.comp.autoGain = true;
+        p.lim.style = LimStyle::Punchy; p.lim.inputGainDb = 11.5f; p.lim.releaseMs = 200.0f; p.lim.ceilingDb = -0.3f;
         return p;
     }
 
@@ -153,7 +156,7 @@ namespace presets
         p.sat.drivePct = 8.0f; p.sat.mixPct = 20.0f; p.sat.outputDb = 0.0f;
         p.comp.thresholdDb = -16.0f; p.comp.ratio = 1.5f; p.comp.kneeDb = 24.0f;
         p.comp.attackMs = 50.0f; p.comp.releaseMs = 300.0f; p.comp.autoRelease = true; p.comp.autoGain = false;
-        p.lim.inputGainDb = 6.0f; p.lim.releaseMs = 600.0f; p.lim.lookaheadMs = 2.0f;
+        p.lim.inputGainDb = 10.0f; p.lim.releaseMs = 600.0f; p.lim.lookaheadMs = 2.0f;
         p.lim.linkTransientsPct = 75.0f; p.lim.linkReleasePct = 100.0f;
         return p;
     }
@@ -163,7 +166,7 @@ namespace presets
         ChainParams p = transparent();
         p.sat.drivePct = 0.0f; p.sat.mixPct = 100.0f;
         p.comp.thresholdDb = -12.0f; p.comp.ratio = 1.5f;
-        p.lim.inputGainDb = 0.0f; p.lim.ceilingDb = -1.0f;
+        p.lim.inputGainDb = 7.0f; p.lim.ceilingDb = -1.0f;
         return p;
     }
 }

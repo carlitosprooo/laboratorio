@@ -364,8 +364,12 @@ BM_TEST (truepeak_meter_accuracy)
         bm::LevelMeter m; m.prepare (kFs);
         Buffer b = makeBuffer (2, 48000); sine (b, f, 0.5, kFs, 0.3);
         const float* d[2] = { b[0].data(), b[1].data() };
-        m.process (d, 2, 48000);
-        CHECK_NEAR (db (m.getTruePeakMax()), db (0.5), f > 15000 ? 0.3 : 0.1);
+        m.process (d, 2, 2000);          // the abrupt start of the tone rings (a real overshoot)
+        m.resetTruePeak();               // -> measure the steady tone only
+        const float* d2[2] = { b[0].data() + 2000, b[1].data() + 2000 };
+        m.process (d2, 2, 46000);
+        REPORT ("%.0f Hz sine @ -6.02 dBFS: true peak meter %.3f dBTP", f, db (m.getTruePeakMax()));
+        CHECK_NEAR (db (m.getTruePeakMax()), db (0.5), 0.05);
     }
 }
 

@@ -1,0 +1,37 @@
+[ RUN  ] defaults_are_kalox_master_original
+[  OK  ] defaults_are_kalox_master_original
+[ RUN  ] processes_real_audio_reports_latency
+    | 6 s through the full chain: finite 1, sample peak -1.662 dBFS, integrated -12.36 LUFS, latency 357 samples
+    | after lookahead 1.004 -> 3 ms: host latency 453, chain latency 453
+[  OK  ] processes_real_audio_reports_latency
+[ RUN  ] input_learn_sets_reference_level
+    | measured -30.99 LUFS -> INPUT gain set to +10.99 dB (target -20 LUFS)
+[  OK  ] input_learn_sets_reference_level
+[ RUN  ] bus_layouts
+[  OK  ] bus_layouts
+[ RUN  ] state_save_and_restore_roundtrip
+    | 97 parameters, 0 mismatches after restore, state size 3661 bytes
+[  OK  ] state_save_and_restore_roundtrip
+[ RUN  ] factory_presets_load_exact_values
+    | KALOX MASTER - ORIGINAL    -> exact
+    | AFRO HOUSE MASTER          -> exact
+    | DEEP HOUSE MASTER          -> exact
+    | TECH HOUSE MASTER          -> exact
+    | CLUB MASTER                -> exact
+    | TRANSPARENT MASTER         -> exact
+    | CUSTOM USER PRESET         -> exact
+[  OK  ] factory_presets_load_exact_values
+[ RUN  ] user_preset_save_load_delete
+[  OK  ] user_preset_save_load_delete
+[ RUN  ] ab_compare_and_undo_redo
+[  OK  ] ab_compare_and_undo_redo
+[ RUN  ] automation_from_another_thread_while_processing
+[  OK  ] automation_from_another_thread_while_processing
+[ RUN  ] editor_creation_and_snapshots
+    | snapshot /home/user/laboratorio/BANKMASTER/docs/screenshots/bankmaster_eq.png
+    | snapshot /home/user/laboratorio/BANKMASTER/docs/screenshots/bankmaster_saturation.png
+    | snapshot /home/user/laboratorio/BANKMASTER/docs/screenshots/bankmaster_compressor.png
+    | snapshot /home/user/laboratorio/BANKMASTER/docs/screenshots/bankmaster_limiter.png
+[  OK  ] editor_creation_and_snapshots
+
+78 checks, 0 failures

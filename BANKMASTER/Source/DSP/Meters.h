@@ -212,7 +212,7 @@ private:
     double fs = 48000;
     float decay = 0.999f, corrCoeff = 0.999f;
     bool measureTruePeak = true;
-    TruePeakInterpolator tpi;
+    TruePeakInterpolatorMeter tpi;
     std::atomic<float> peakHold[kMaxChannels] { {0.0f}, {0.0f} };
     std::atomic<float> truePeakMax { 0.0f }, correlation { 1.0f };
     double sLR = 0, sLL = 0, sRR = 0;
