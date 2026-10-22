@@ -52,10 +52,13 @@ BANKMASTER/
     TruePeak.h  Limiter.h  Meters.h  MasterChain.h  FactoryPresets.h
   Source/Plugin/                 invólucro JUCE
     Parameters.*  PresetManager.*  PluginProcessor.*  PluginEditor.*
-    UI/  Theme.h  LookAndFeel.*  Widgets.h  EqGraph.*  Pages.*  MeterBar.*
+    UI/  DesignSystem.h  Controls.*  Displays.*  Pages.*  Chrome.*   (interface V2: um único código para macOS e Windows)
   Tests/DspTests.cpp             19 testes DSP (sem JUCE)
   Tests/PluginTests.cpp          testes do plugin (estado, presets, A/B, undo, automação, UI)
   Tools/Render.cpp               render offline + comparação objetiva com a cadeia original
+  Tools/HostCheck.cpp            carrega o plugin COMPILADO (VST3/AU): identidade, parâmetros, estado e áudio (teste nulo V1 × V2)
+  Resources/                     fontes embutidas (Inter, Montserrat — OFL) e ícone do app
+  Design/Art/                    gerador do ícone e da arte dos instaladores (mesmo design system da UI)
   scripts/build_macos.sh         build universal + testes + auval + pluginval
   installer/macos/               .pkg (VST3 / AU / Standalone selecionáveis)
   docs/                          parâmetros, arquitetura, testes, relatório final, screenshots, logs
