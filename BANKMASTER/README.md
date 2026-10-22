@@ -1,11 +1,12 @@
-# BANKMASTER BY KALOX — 4-IN-1 MASTERING SUITE
+# BANKMASTER — BY KALOX · 4-IN-1 MASTERING SUITE · 2.0
 
 Plugin de masterização com quatro processadores em uma única instância:
 
 **INPUT → MASTER EQ → MASTER SATURATION → MASTER COMPRESSOR → MASTER LIMITER → OUTPUT**
 
-Formatos: VST3 · Audio Unit · Standalone — macOS universal (Apple Silicon + Intel, 10.15+).
-Arquitetura portátil (Windows x64 VST3 e Linux VST3 já compilam e passam nos testes no CI).
+Formatos: macOS Universal (Apple Silicon + Intel, 10.15+) — VST3 · Audio Unit · Standalone;
+Windows 10/11 x64 — VST3 · Standalone. Fabricante: **Kalox Audio**. Uma única base de código JUCE/C++:
+mesma interface, mesmo som e mesmos controles nas duas plataformas.
 Todo o DSP é implementação própria (sem código, interface ou algoritmo de terceiros), funciona offline
 e não depende de plugins FabFilter instalados.
 
@@ -19,8 +20,8 @@ e não depende de plugins FabFilter instalados.
 
 | Plataforma | Arquivo | Conteúdo |
 |---|---|---|
-| macOS Universal (arm64 + x86_64) | `BANKMASTER-BY-KALOX-1.0.0-macOS-Universal.dmg` | instalador guiado (.pkg) VST3 / AU / Standalone, Read Me, desinstalador |
-| Windows 10/11 x64 | `BANKMASTER-BY-KALOX-1.0.0-Windows-x64-Setup.exe` | assistente gráfico: VST3 / Standalone, desinstalador |
+| macOS Universal (arm64 + x86_64) | `BANKMASTER-BY-KALOX-2.0.0-macOS-Universal.dmg` | instalador guiado (.pkg) VST3 / AU / Standalone, Read Me, desinstalador |
+| Windows 10/11 x64 | `BANKMASTER-BY-KALOX-2.0.0-Windows-x64-Setup.exe` | assistente gráfico: VST3 / Standalone, desinstalador |
 
 Gerados e testados (instalação + desinstalação reais) pelo GitHub Actions. Ainda **sem assinatura digital**
 — detalhes em `docs/INSTALLERS.md`.
@@ -29,17 +30,24 @@ Gerados e testados (instalação + desinstalação reais) pelo GitHub Actions. A
 
 1. Instale pelo DMG (macOS) ou Setup.exe (Windows) e faça *Rescan* dos plugins.
 2. Coloque **uma instância** de BANKMASTER na Master. Ela abre no preset **KALOX MASTER - ORIGINAL**.
-3. Toque o trecho mais alto da música, clique **LEARN** (painel INPUT), espere alguns segundos e clique de
-   novo: o ganho de entrada é ajustado para que a mix chegue à cadeia em −20 LUFS — o preset se comporta
-   igual em músicas com níveis diferentes (o +11 dB do limiter continua ajustável).
-4. Ajuste cada módulo nas abas **EQ | SATURATION | COMPRESSOR | LIMITER** (o botão ⏻ de cada aba liga/desliga
-   o módulo sem clique), ou ligue **ONE MASTER** e use um único knob (100 % = como ajustado).
-5. Monitore LUFS (M/S/I), TRUE PEAK, redução de ganho e correlação na barra inferior.
-6. **SAVE** salva presets de usuário; **A/B / COPY**, **UNDO / REDO** para comparar e voltar atrás.
+3. Toque o trecho mais alto da música, clique **LEARN** (barra inferior), espere alguns segundos e clique de
+   novo: o ganho de entrada é ajustado para que a mix chegue à cadeia em −20 LUFS (o alvo é ajustável
+   arrastando o valor no próprio botão).
+4. A faixa de fluxo **INPUT → EQ → SATURATION → COMPRESSOR → LIMITER → OUTPUT** abre cada módulo; o ⏻ de
+   cada nó liga/desliga o módulo sem clique. INPUT e OUTPUT são ajustados arrastando o valor (duplo clique = 0 dB).
+5. Cabeçalho: navegador de presets (◀ nome ▶, salvar, ⟲ voltar ao preset carregado com confirmação),
+   **A | B** + copiar, **↶ UNDO | REDO ↷** (⌘Z / ⇧⌘Z, Ctrl+Z / Ctrl+Y), **ONE MASTER**, menu (tamanho da janela).
+6. Barra global: INPUT, LUFS M/S/I, TRUE PEAK (clique = zerar), GR do compressor e do limiter, correlação,
+   OUTPUT, LEARN e BYPASS.
 7. Exporte pela DAW normalmente — a latência (7,4 ms @ 48 kHz no preset KALOX) é compensada pelo Live.
 
+Knobs: arrastar, Shift = ajuste fino, roda do mouse, duplo clique = valor padrão, duplo clique no valor = digitar.
 EQ: arraste os nós (Shift = só frequência), roda do mouse = Q, duplo clique no nó = liga/desliga,
-duplo clique no fundo = nova banda.
+duplo clique no fundo = nova banda. Janela redimensionável de 1080 × 700 a 2000 × 1300 (padrão 1200 × 780).
+
+**Atualizando da 1.0:** instale por cima. Projetos existentes continuam abrindo com os mesmos ajustes
+(mesmos IDs do plugin, som idêntico — ver `docs/V2_REPORT.md`). No Live, faça *Rescan* (Option/Alt +
+Rescan = completo) para o plugin aparecer em **Kalox Audio**.
 
 ## Presets
 
@@ -59,7 +67,7 @@ macOS (Xcode CLT + CMake ≥ 3.22):
 
 ```bash
 scripts/build_macos.sh              # universal arm64+x86_64, testes (nativo + Rosetta), auval, pluginval
-installer/macos/build_pkg.sh        # dist/BANKMASTER-BY-KALOX-1.0.0-macOS-universal.pkg
+installer/macos/build_pkg.sh        # dist/BANKMASTER-BY-KALOX-2.0.0-macOS-universal.pkg
 ```
 
 Nada é instalado automaticamente (`COPY_PLUGIN_AFTER_BUILD FALSE`); o instalador só grava
@@ -80,6 +88,8 @@ Render/comparação offline: `bankmaster_render --help`.
 - `docs/TEST_REPORT.md` — os 15 testes exigidos com resultados medidos
 - `docs/FINAL_REPORT.md` — relatório final (arquivos, testes, limitações, pendências)
 - `docs/INSTALLERS.md` — instaladores DMG / EXE, testes de instalação, assinatura
+- `docs/V2_REPORT.md` — relatório da versão 2.0 (interface, Kalox Audio, teste nulo V1 × V2, validação)
+- `Design/README.md` — design system V2, arte e mockups
 
 ## Licenças
 
