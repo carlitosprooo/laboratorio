@@ -2,8 +2,8 @@
 
 Data: 22/10/2026 · Branch `claude/quirky-curie-aoazly` · Base: conceito A — OBSIDIAN / NEON aprovado.
 
-> Resultados finais do CI (tamanhos, SHA-256, links dos instaladores): seção 7, preenchida a partir da
-> execução final no GitHub Actions.
+> Execução final: GitHub Actions run #12 — https://github.com/carlitosprooo/laboratorio/actions/runs/39859554116
+> (macOS, Windows e Linux verdes). Instaladores e checksums: seção 7.
 
 ## 1. O que mudou
 
@@ -73,8 +73,8 @@ artefatos do CI: macOS (Retina 2×, CoreGraphics) e Windows (100 %, 125 %, 150 %
 | | macOS Universal (arm64 + x86_64) | Windows x64 |
 |---|---|---|
 | Build | VST3, AU, Standalone universais | VST3, Standalone |
-| Testes DSP | 19 / 133 verificações, 0 falhas (arm64 e x86_64) | 0 falhas |
-| Testes do plugin + UI | 0 falhas | 0 falhas |
+| Testes DSP | 19 testes / 133 verificações, 0 falhas (arm64 e x86_64) | 19 / 133, 0 falhas |
+| Testes do plugin + UI | 165 verificações, 0 falhas | 165 verificações, 0 falhas |
 | Identidade | vendor Kalox Audio, CID e códigos inalterados, ícone `.icns` | vendor Kalox Audio, CID inalterado, ícone no `.exe` |
 | auval | SUCCEEDED arm64 + x86_64 (também após o upgrade) | — |
 | pluginval 10 | VST3 + AU SUCCESS | VST3 SUCCESS |
@@ -90,3 +90,27 @@ artefatos do CI: macOS (Retina 2×, CoreGraphics) e Windows (100 %, 125 %, 150 %
   sistema operacional do CI, não por um monitor físico.
 - Assinatura digital: os instaladores continuam **sem** Developer ID / notarização (macOS) e sem Authenticode
   (Windows) — o sistema pede confirmação na primeira abertura (instruções no Read Me).
+
+## 7. Instaladores 2.0.0 (run #12)
+
+| Instalador | Tamanho | SHA-256 | Download |
+|---|---|---|---|
+| `BANKMASTER-BY-KALOX-2.0.0-macOS-Universal.dmg` | 20.224.399 bytes | `cc57bc45afa696dbc4306f51ba2b72cb06f3fc8eb9cec7a59fa1dfb2b2cfcf93` | https://github.com/carlitosprooo/laboratorio/actions/runs/39859554116/artifacts/12461921955 |
+| `BANKMASTER-BY-KALOX-2.0.0-Windows-x64-Setup.exe` | 5.758.336 bytes | `347340f8774707c88db239462ed9f7c328a4ec1ced852c1e2cee401b08699920` | https://github.com/carlitosprooo/laboratorio/actions/runs/39859554116/artifacts/12461708615 |
+
+Evidências do run #12 (logs completos nos artefatos de validação):
+
+- macOS: `hdiutil verify` VALID (UDZO); `.pkg` dentro do DMG idêntico ao validado; instalação real adicionou
+  apenas `BANKMASTER.vst3`, `BANKMASTER.component` e `BANKMASTER.app` (todos `x86_64 arm64`); auval no componente
+  instalado SUCCEEDED arm64 + x86_64; Steinberg 47/0 no VST3 instalado; desinstalação → sistema idêntico, recibos
+  removidos. Upgrade a partir do DMG 1.0 publicado (sha256 `4aed11c8…`): "The upgrade was successful", os três itens
+  em 2.0.0, identidade VST3/AU inalterada, auval OK após o upgrade.
+- Teste nulo macOS (1.0 publicada × 2.0): VST3 arm64, AU arm64, VST3 x86_64, AU x86_64 — 10/10 cenários
+  bit-idênticos em cada um. Única diferença de texto (só arm64): 9 parâmetros exibiam "-0.00 dB" na 1.0 e agora
+  "0.00 dB" (Input Gain, Output Gain, EQ 1/3/4 Gain, EQ 1/2/5 Dyn Range, Comp Makeup).
+- Windows: Setup instala só o VST3 e `Program Files\Kalox Audio\BANKMASTER`; "Aplicativos instalados":
+  BANKMASTER BY KALOX 2.0.0, Publisher Kalox Audio; Steinberg 47/0 no VST3 instalado; desinstalação → arquivos e
+  registro idênticos ao estado inicial. Upgrade a partir do Setup 1.0 publicado (sha256 `560dc5c1…`): códigos 0,
+  pasta `KALOX` e chave antiga removidas, identidade VST3 inalterada; teste nulo 10/10 bit-idêntico, textos idênticos.
+- Identidade (ambas): `moduleinfo.json` Vendor "Kalox Audio", CIDs idênticos à 1.0; AU "Kalox Audio: BANKMASTER",
+  `aufx Bkms Klox`; ícone novo no app macOS (`Icon.icns`) e no `.exe` do Windows.

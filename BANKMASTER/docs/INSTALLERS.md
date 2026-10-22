@@ -5,7 +5,16 @@ sem nenhum plugin FabFilter. DSP e presets idênticos aos da 1.0 (teste nulo bit
 
 ## Downloads — 2.0.0
 
-@@DOWNLOADS@@
+| Instalador | Tamanho | SHA-256 | Download (artefato do run #12) |
+|---|---|---|---|
+| `BANKMASTER-BY-KALOX-2.0.0-macOS-Universal.dmg` | 20.224.399 bytes (19,3 MB) | `cc57bc45afa696dbc4306f51ba2b72cb06f3fc8eb9cec7a59fa1dfb2b2cfcf93` | https://github.com/carlitosprooo/laboratorio/actions/runs/39859554116/artifacts/12461921955 |
+| `BANKMASTER-BY-KALOX-2.0.0-Windows-x64-Setup.exe` | 5.758.336 bytes (5,5 MB) | `347340f8774707c88db239462ed9f7c328a4ec1ced852c1e2cee401b08699920` | https://github.com/carlitosprooo/laboratorio/actions/runs/39859554116/artifacts/12461708615 |
+
+Run #12: https://github.com/carlitosprooo/laboratorio/actions/runs/39859554116 (macOS, Windows e Linux verdes).
+Logs: macOS https://github.com/carlitosprooo/laboratorio/actions/runs/39859554116/artifacts/12461637633 ·
+Windows https://github.com/carlitosprooo/laboratorio/actions/runs/39859554116/artifacts/12462262273
+(os artefatos são .zip com o instalador e o `.sha256`; expiram em 20/01/2027; download exige login no GitHub).
+Nenhum dos dois tem assinatura digital (pkg/DMG: "no signature"; Setup: Authenticode NotSigned).
 
 Testes do CI em cada instalador: instalação real, lista exata de arquivos instalados, validadores no plugin
 INSTALADO, desinstalação → sistema idêntico ao inicial; **upgrade real 1.0 → 2.0** a partir do instalador 1.0
