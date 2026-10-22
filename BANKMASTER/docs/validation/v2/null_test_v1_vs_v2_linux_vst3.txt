@@ -1,0 +1,24 @@
+parameters.txt                     identical
+random_state_values.txt            identical
+default_48k_512.txt                identical
+default_48k_512.f32                BIT-IDENTICAL  samples 1152000  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -0.13 dBFS
+default_44k1_256.txt               identical
+default_44k1_256.f32               BIT-IDENTICAL  samples 705600  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -0.13 dBFS
+program0_48k_512.txt               identical
+program0_48k_512.f32               BIT-IDENTICAL  samples 768000  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -0.13 dBFS
+program1_48k_512.txt               identical
+program1_48k_512.f32               BIT-IDENTICAL  samples 768000  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -0.13 dBFS
+program2_48k_512.txt               identical
+program2_48k_512.f32               BIT-IDENTICAL  samples 768000  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -0.13 dBFS
+program3_48k_512.txt               identical
+program3_48k_512.f32               BIT-IDENTICAL  samples 768000  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -0.13 dBFS
+program4_48k_512.txt               identical
+program4_48k_512.f32               BIT-IDENTICAL  samples 768000  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -0.33 dBFS
+program5_48k_512.txt               identical
+program5_48k_512.f32               BIT-IDENTICAL  samples 768000  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -2.26 dBFS
+program6_48k_512.txt               identical
+program6_48k_512.f32               BIT-IDENTICAL  samples 768000  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -4.65 dBFS
+random_state_48k_480.txt           identical
+random_state_48k_480.f32           BIT-IDENTICAL  samples 768000  differing 0  max |diff| 0 (-600.0 dBFS)  output peak -0.13 dBFS
+
+RESULT: outputs, latency, parameters and restored state are identical

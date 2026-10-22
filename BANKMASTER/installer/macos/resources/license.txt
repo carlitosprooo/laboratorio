@@ -1,6 +1,6 @@
-BANKMASTER by KALOX - End User Terms
+BANKMASTER BY KALOX - End User Terms
 
-Copyright (c) 2026 KALOX. All rights reserved.
+Copyright (c) 2026 Kalox Audio. All rights reserved.
 
 BANKMASTER is provided "as is", without warranty of any kind. Presets are starting
 points for mastering, not guarantees of a finished master suitable for every platform.

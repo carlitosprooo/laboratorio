@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# BANKMASTER by KALOX — macOS universal build (Apple Silicon + Intel), tests and validation.
+# BANKMASTER BY KALOX — macOS universal build (Apple Silicon + Intel), tests and validation.
 # Usage: scripts/build_macos.sh [--skip-validation]
 # Requires: Xcode command line tools, CMake >= 3.22. Optional: pluginval in PATH.
 # Nothing is installed: the bundles stay in build-mac/. Use installer/macos/build_pkg.sh

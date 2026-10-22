@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# BANKMASTER by KALOX — macOS DMG (contains the validated .pkg, Read Me and uninstaller)
-# Usage: installer/macos/dmg/build_dmg.sh path/to/BANKMASTER-by-KALOX-1.0.0-macOS-universal.pkg
+# BANKMASTER BY KALOX — macOS DMG (contains the validated .pkg, Read Me and uninstaller)
+# Usage: installer/macos/dmg/build_dmg.sh path/to/BANKMASTER-BY-KALOX-1.0.0-macOS-universal.pkg
 # Requires: python3 + dmgbuild (pip install dmgbuild), macOS tools (sips, iconutil, tiffutil, hdiutil).
 # Optional signing: export BM_SIGN_APP="Developer ID Application: NAME (TEAMID)"
 set -euo pipefail
@@ -10,7 +10,7 @@ ASSETS="$ROOT/installer/assets"
 PKG="${1:?usage: build_dmg.sh path/to/pkg}"
 VERSION="$(sed -n 's/^project (BANKMASTER VERSION \([0-9.]*\).*/\1/p' "$ROOT/CMakeLists.txt")"
 OUT="$ROOT/dist"
-DMG="$OUT/BANKMASTER-by-KALOX-$VERSION-macOS-Universal.dmg"
+DMG="$OUT/BANKMASTER-BY-KALOX-$VERSION-macOS-Universal.dmg"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$OUT"
@@ -34,7 +34,7 @@ rm -f "$DMG"
 dmgbuild -s "$HERE/dmg_settings.py" \
   -D pkg="$PKG" -D readme="$HERE/readme.txt" -D uninstall="$WORK/uninstall.command" \
   -D background="$WORK/background.tiff" -D icon="$WORK/BANKMASTER.icns" \
-  "BANKMASTER by KALOX" "$DMG"
+  "BANKMASTER BY KALOX" "$DMG"
 
 if [[ -n "${BM_SIGN_APP:-}" ]]; then
   codesign --force --timestamp --sign "$BM_SIGN_APP" "$DMG"

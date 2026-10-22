@@ -1,449 +1,483 @@
-// BANKMASTER by KALOX — the four processor pages
+// BANKMASTER — BY KALOX · V2 module pages
 #include "Pages.h"
 
+namespace bmui
+{
 namespace
 {
-    juce::String fmtDb (float v, int dec = 1)
+    String hzShort (float f) { return f >= 1000.0f ? String (f / 1000.0f, f >= 10000.0f ? 1 : 2) + "kHz" : String (f, f < 100.0f ? 1 : 0) + "Hz"; }
+
+    /** Real response of a prototype band of the given type (icon). */
+    void bandTypeIcon (juce::Graphics& g, Rectangle<float> r, bm::BandType t, juce::Colour c)
     {
-        if (! std::isfinite (v) || v < -99.0f) return "-inf";
-        return (v > 0 ? "+" : "") + juce::String (v, dec);
+        bm::EqBandParams b;
+        b.enabled = true; b.type = t; b.freq = 630.0f; b.q = 1.2f; b.slopeIdx = 3; b.gainDb = 9.0f;
+        Path p;
+        for (int i = 0; i <= 24; ++i)
+        {
+            const double f = 20.0 * std::pow (1000.0, i / 24.0);
+            const float d = (float) juce::jlimit (-14.0, 12.0, bm::bandMagnitudeDb (b, f, 48000.0));
+            const auto pt = juce::Point<float> (r.getX() + r.getWidth() * i / 24.0f, r.getCentreY() + r.getHeight() * 0.15f - d / 14.0f * r.getHeight() * 0.5f);
+            if (i == 0) p.startNewSubPath (pt); else p.lineTo (pt);
+        }
+        g.setColour (c);
+        g.strokePath (p, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
-    void sectionTitle (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& t)
+    /** Lays knobs out in equal columns. */
+    void layoutKnobs (Rectangle<int> r, std::initializer_list<juce::Component*> items, int cols = 0, int gap = 6)
     {
-        g.setColour (theme::iceDeep);
-        g.setFont (theme::font (12.0f, true));
-        g.drawText (t, r, juce::Justification::centredLeft);
+        const int n = cols > 0 ? cols : (int) items.size();
+        const int w = (r.getWidth() - gap * (n - 1)) / n;
+        for (auto* c : items) { c->setBounds (r.removeFromLeft (w)); r.removeFromLeft (gap); }
     }
+
+    struct Titles
+    {
+        static void draw (juce::Graphics& g, Rectangle<int> r, const String& t, juce::Colour c) { sectionTitle (g, r.toFloat(), t, c); }
+    };
+}
+
+void Page::paintDeck (juce::Graphics& g)
+{
+    panel (g, deckArea.toFloat(), P(), 12.0f, true);
+}
+
+void Page::deckDivider (juce::Graphics& g, int x)
+{
+    g.setColour (P().edge);
+    g.fillRect ((float) x, (float) deckArea.getY() + 18.0f, 1.0f, (float) deckArea.getHeight() - 36.0f);
 }
 
 // ============================================================================ EQ
-EqPage::EqPage (BankMasterProcessor& p) : proc (p), graph (p)
+void BandChip::paintButton (juce::Graphics& g, bool over, bool)
 {
-    addAndMakeVisible (graph);
-    graph.onBandSelected = [this] (int b) { selectBand (b); };
+    const auto& p = P();
+    const auto params = proc.getCurrentParams();
+    const auto& b = params.eq.bands[(size_t) band];
+    const auto col = p.bands[band];
+    auto r = getLocalBounds().toFloat();
+    g.setColour (selected ? p.panelHi.brighter (0.06f) : over ? p.panelHi : p.well);
+    g.fillRoundedRectangle (r, 7);
+    g.setColour (selected ? col : over ? p.edgeHi : p.edge);
+    g.drawRoundedRectangle (r.reduced (0.5f), 7, selected ? 1.4f : 1.0f);
+    auto top = r.reduced (7, 6).removeFromTop (16);
+    g.setColour (b.enabled ? col : col.withAlpha (0.25f));
+    g.fillEllipse (top.removeFromLeft (8).withSizeKeepingCentre (8, 8));
+    g.setColour (selected ? p.text : p.textDim);
+    g.setFont (font (11.0f, Fonts::Bold));
+    g.drawText (String (band + 1), top.withTrimmedLeft (5), juce::Justification::centredLeft, false);
+    bandTypeIcon (g, top.removeFromRight (22).reduced (0, 2), b.type, selected ? col : p.textMute);
+    g.setColour (b.enabled ? (selected ? p.text : p.textDim) : p.textMute);
+    g.setFont (font (11.0f, Fonts::Medium));
+    g.drawText (b.enabled ? hzShort (b.freq) : String ("OFF"), r.reduced (7, 6).removeFromBottom (17), juce::Justification::centredLeft, false);
+}
+
+EqPage::EqPage (BankMasterProcessor& p) : Page (p), display (p)
+{
+    addAndMakeVisible (display);
+    display.onBandSelected = [this] (int b) { selectBand (b); };
+    for (auto* c : std::initializer_list<juce::Component*> { &analyzerCap, &rangeCap, &analyzer, &range, &bandOn, &typeCap, &slopeCap, &placeCap,
+                                                             &type, &slope, &place, &freq, &gain, &q, &dynOn, &dynRange, &dynThr })
+        addAndMakeVisible (c);
     for (int b = 0; b < bm::kNumEqBands; ++b)
     {
-        auto& bt = bandButtons[b];
-        bt.setButtonText (juce::String (b + 1));
-        bt.setClickingTogglesState (false);
-        bt.setColour (juce::TextButton::buttonOnColourId, theme::bandColour (b).darker (0.35f));
-        bt.onClick = [this, b] { selectBand (b); };
-        addAndMakeVisible (bt);
+        chips[b] = std::make_unique<BandChip> (p, b);
+        chips[b]->onClick = [this, b] { selectBand (b); };
+        addAndMakeVisible (*chips[b]);
     }
-    selectBand (1);
+    auto& ui = proc.getUiState();
+    const int rangeIdx = juce::jlimit (0, 3, (int) ui.getProperty ("eqRange", 1));
+    const int mode = juce::jlimit (0, 2, (int) ui.getProperty ("analyzer", 2));
+    const float ranges[] = { 3.0f, 6.0f, 12.0f, 30.0f };
+    range.setSelected (rangeIdx);
+    display.setRangeDb (ranges[rangeIdx]);
+    analyzer.setSelected (mode);
+    display.setAnalyzerMode (mode);
+    range.onChange = [this, ranges] (int i) { display.setRangeDb (ranges[i]); proc.getUiState().setProperty ("eqRange", i, nullptr); };
+    analyzer.onChange = [this] (int i) { display.setAnalyzerMode (i); proc.getUiState().setProperty ("analyzer", i, nullptr); };
+    bandOn.setTooltip ("Band on / off");
+    dynOn.setTooltip ("Dynamic EQ for this band");
+    selectBand (juce::jlimit (0, bm::kNumEqBands - 1, (int) ui.getProperty ("eqBand", 2)));
 }
 
 void EqPage::selectBand (int b)
 {
     band = b;
-    graph.setSelectedBand (b);
-    for (int i = 0; i < bm::kNumEqBands; ++i) bandButtons[i].setToggleState (i == b, juce::dontSendNotification);
-    auto& s = proc.getState();
-    const auto col = theme::bandColour (b).darker (0.3f);
-    bandOn = std::make_unique<Toggle> (s, bmp::id::eq (b, "on"), "BAND ON", col);
-    dynOn = std::make_unique<Toggle> (s, bmp::id::eq (b, "dyn"), "DYNAMIC", col);
-    type = std::make_unique<Choice> (s, bmp::id::eq (b, "type"), "Type");
-    slope = std::make_unique<Choice> (s, bmp::id::eq (b, "slope"), "Slope");
-    place = std::make_unique<Choice> (s, bmp::id::eq (b, "place"), "Stereo / M-S");
-    freq = std::make_unique<Knob> (s, bmp::id::eq (b, "freq"), "Freq", col);
-    gain = std::make_unique<Knob> (s, bmp::id::eq (b, "gain"), "Gain", col);
-    q = std::make_unique<Knob> (s, bmp::id::eq (b, "q"), "Q", col);
-    range = std::make_unique<Knob> (s, bmp::id::eq (b, "range"), "Dyn Range", col);
-    thr = std::make_unique<Knob> (s, bmp::id::eq (b, "thr"), "Threshold", col);
-    for (juce::Component* c : { (juce::Component*) bandOn.get(), (juce::Component*) dynOn.get(), (juce::Component*) type.get(),
-                                (juce::Component*) slope.get(), (juce::Component*) place.get(), (juce::Component*) freq.get(),
-                                (juce::Component*) gain.get(), (juce::Component*) q.get(), (juce::Component*) range.get(), (juce::Component*) thr.get() })
-        addAndMakeVisible (c);
-    resized();
+    display.setSelectedBand (b);
+    proc.getUiState().setProperty ("eqBand", b, nullptr);
+    for (int i = 0; i < bm::kNumEqBands; ++i) { chips[i]->selected = i == b; chips[i]->repaint(); }
+    const auto col = P().bands[b];
+    bandOn.bind (prm (bmp::id::eq (b, "on")), um());
+    bandOn.setOnColour (col);
+    type.bind (prm (bmp::id::eq (b, "type")), um());
+    slope.bind (prm (bmp::id::eq (b, "slope")), um());
+    place.bind (prm (bmp::id::eq (b, "place")), um());
+    place.setAccent (col);
+    freq.bind (prm (bmp::id::eq (b, "freq")), um());
+    gain.bind (prm (bmp::id::eq (b, "gain")), um());
+    q.bind (prm (bmp::id::eq (b, "q")), um());
+    dynOn.bind (prm (bmp::id::eq (b, "dyn")), um());
+    dynOn.setOnColour (col);
+    dynRange.bind (prm (bmp::id::eq (b, "range")), um());
+    dynThr.bind (prm (bmp::id::eq (b, "thr")), um());
+    for (auto* k : { &freq, &gain, &q, &dynRange, &dynThr }) k->setAccent (col);
     updateEnablement();
     repaint();
 }
 
 void EqPage::updateEnablement()
 {
-    const auto p = proc.getCurrentParams();
-    const auto& bd = p.eq.bands[(size_t) band];
+    const auto bd = proc.getCurrentParams().eq.bands[(size_t) band];   // copy: getCurrentParams() returns a temporary
     const bool gainType = bm::bandSupportsGain (bd.type);
     const bool slopeType = bd.type == bm::BandType::LowCut || bd.type == bm::BandType::HighCut
                         || bd.type == bm::BandType::LowShelf || bd.type == bm::BandType::HighShelf;
-    if (gain) gain->setEnabled (gainType);
-    if (slope) slope->setEnabled (slopeType);
-    if (dynOn) dynOn->setEnabled (bm::bandSupportsDynamics (bd.type));
+    gain.setEnabled (gainType);
+    slope.setEnabled (slopeType);
+    dynOn.setEnabled (bm::bandSupportsDynamics (bd.type));
     const bool dyn = bd.dynOn && bm::bandSupportsDynamics (bd.type);
-    if (range) range->setEnabled (dyn);
-    if (thr) thr->setEnabled (dyn);
+    dynRange.setEnabled (dyn);
+    dynThr.setEnabled (dyn);
+}
+
+void EqPage::tick()
+{
+    display.tick();
+    updateEnablement();
+    const float a = proc.getChain().getEq().getCurrentGainDb (band);
+    const auto bd = proc.getCurrentParams().eq.bands[(size_t) band];   // copy: getCurrentParams() returns a temporary
+    const float now = bd.dynOn && bm::bandSupportsDynamics (bd.type) ? a - bd.gainDb : 0.0f;
+    if (std::abs (now - activity) > 0.005f) { activity = now; repaint (deckArea); }
+    for (auto& c : chips) c->repaint();
 }
 
 void EqPage::paint (juce::Graphics& g)
 {
-    auto r = getLocalBounds();
-    r.removeFromTop (r.getHeight() - 140);
-    theme::drawPanel (g, r.toFloat());
-    sectionTitle (g, r.reduced (14, 0).removeFromTop (24).translated (0, 4), "BAND");
+    const auto& p = P();
+    paintDeck (g);
+    auto deck = deckArea.reduced (18, 14);
+    const auto col = p.bands[band];
+    const auto bd = proc.getCurrentParams().eq.bands[(size_t) band];   // copy: getCurrentParams() returns a temporary
+    Titles::draw (g, deck.withWidth (200).withHeight (18), "BANDS", p.module[0]);
+    deckDivider (g, deck.getX() + 380);
+    deckDivider (g, deck.getRight() - 320);
+    Titles::draw (g, Rectangle<int> (deck.getX() + 400 + 28, deck.getY(), 300, 18),
+                  "BAND " + String (band + 1) + String (juce::CharPointer_UTF8 ("  \xc2\xb7  ")) + bmp::bandTypeNames()[(int) bd.type], col);
+    Titles::draw (g, Rectangle<int> (deck.getRight() - 300, deck.getY(), 200, 18), "DYNAMIC EQ", col);
+    // dynamic activity (live gain change of the band)
+    auto act = Rectangle<float> ((float) deck.getRight() - 300, (float) deck.getBottom() - 22, 300, 22);
+    caption (g, act.removeFromLeft (80), "ACTIVITY", p, juce::Justification::centredLeft);
+    auto val = act.removeFromRight (64);
+    g.setColour (p.text);
+    g.setFont (font (type::value, Fonts::Medium));
+    g.drawText (trimNegativeZero (String (activity, 2)) + " dB", val, juce::Justification::centredRight, false);
+    auto bar = act.reduced (4, 0).withSizeKeepingCentre (act.getWidth() - 8, 5);
+    g.setColour (p.well); g.fillRoundedRectangle (bar, 2.5f);
+    const float rangeAbs = juce::jmax (0.1f, std::abs (bd.dynRangeDb));
+    g.setColour (col);
+    g.fillRoundedRectangle (bar.withWidth (juce::jmax (4.0f, bar.getWidth() * juce::jlimit (0.0f, 1.0f, std::abs (activity) / rangeAbs))), 2.5f);
 }
 
 void EqPage::resized()
 {
     auto r = getLocalBounds();
-    auto bottom = r.removeFromBottom (140);
-    r.removeFromBottom (10);
-    graph.setBounds (r);
+    auto disp = r.removeFromTop (juce::roundToInt (r.getHeight() * 0.60f));
+    display.setBounds (disp);
+    r.removeFromTop (12);
+    deckArea = r;
 
-    auto c = bottom.reduced (14, 10);
-    c.removeFromTop (22);
-    auto bandCol = c.removeFromLeft (150);
-    auto row = bandCol.removeFromTop (30);
-    for (int b = 0; b < bm::kNumEqBands; ++b) { bandButtons[b].setBounds (row.removeFromLeft (28)); row.removeFromLeft (2); }
-    bandCol.removeFromTop (8);
-    if (bandOn) bandOn->setBounds (bandCol.removeFromTop (30).withWidth (142));
-    c.removeFromLeft (10);
-    auto combos = c.removeFromLeft (150);
-    if (type) type->setBounds (combos.removeFromTop (44));
-    if (slope) slope->setBounds (combos.removeFromTop (44));
-    c.removeFromLeft (10);
-    auto combos2 = c.removeFromLeft (150);
-    if (place) place->setBounds (combos2.removeFromTop (44));
-    combos2.removeFromTop (14);
-    if (dynOn) dynOn->setBounds (combos2.removeFromTop (30));
-    c.removeFromLeft (16);
-    if (freq) layoutRow (c, { freq.get(), gain.get(), q.get(), range.get(), thr.get() }, 10);
+    // display toolbar (top right of the display)
+    auto tb = disp.reduced (14, 10).removeFromTop (24);
+    auto rg = tb.removeFromRight (176);
+    rangeCap.setBounds (rg.removeFromLeft (52));
+    rg.removeFromLeft (8);
+    range.setBounds (rg);
+    tb.removeFromRight (16);
+    auto an = tb.removeFromRight (282);
+    analyzerCap.setBounds (an.removeFromLeft (74));
+    an.removeFromLeft (8);
+    analyzer.setBounds (an);
+
+    auto deck = r.reduced (18, 14);
+    auto c1 = deck.removeFromLeft (360);
+    c1.removeFromTop (26);
+    {
+        auto row = c1.removeFromTop (50);
+        const int w = row.getWidth() / bm::kNumEqBands;
+        for (auto& c : chips) c->setBounds (row.removeFromLeft (w).reduced (3, 0));
+    }
+    c1.removeFromTop (10);
+    {
+        auto row = c1.removeFromTop (44);
+        auto left = row.removeFromLeft (row.getWidth() / 2 - 6);
+        row.removeFromLeft (12);
+        typeCap.setBounds (left.removeFromTop (16)); type.setBounds (left.removeFromTop (26));
+        slopeCap.setBounds (row.removeFromTop (16)); slope.setBounds (row.removeFromTop (26));
+    }
+    c1.removeFromTop (10);
+    {
+        auto row = c1.removeFromTop (26);
+        placeCap.setBounds (row.removeFromLeft (92));
+        place.setBounds (row);
+    }
+    deck.removeFromLeft (40);
+    auto c3 = deck.removeFromRight (300);
+    deck.removeFromRight (40);
+    {
+        auto t = c3.removeFromTop (20);
+        dynOn.setBounds (t.removeFromRight (72).withSizeKeepingCentre (72, 22));
+        c3.removeFromTop (6);
+        c3.removeFromBottom (28);
+        layoutKnobs (c3, { &dynRange, &dynThr });
+    }
+    {
+        auto t = deck.removeFromTop (20);
+        bandOn.setBounds (t.removeFromLeft (22).withSizeKeepingCentre (22, 22));
+        deck.removeFromTop (6);
+        layoutKnobs (deck, { &freq, &gain, &q });
+    }
+}
+
+juce::Array<juce::Component*> EqPage::getBoundControls()
+{
+    return { &bandOn, &type, &slope, &place, &freq, &gain, &q, &dynOn, &dynRange, &dynThr };
 }
 
 // ============================================================================ SATURATION
-void SatCurve::paint (juce::Graphics& g)
+SatPage::SatPage (BankMasterProcessor& p) : Page (p), display (p)
 {
-    const auto b = getLocalBounds().toFloat();
-    theme::drawDisplay (g, b);
-    const auto a = b.reduced (18.0f);
-    const auto p = bm::applyOneMaster (proc.getCurrentParams());
-    g.setColour (theme::grid);
-    for (int i = 1; i < 4; ++i)
-    {
-        g.drawVerticalLine ((int) (a.getX() + a.getWidth() * i / 4), a.getY(), a.getBottom());
-        g.drawHorizontalLine ((int) (a.getY() + a.getHeight() * i / 4), a.getX(), a.getRight());
-    }
-    g.setColour (theme::gridStrong);
-    g.drawLine (a.getX(), a.getBottom(), a.getRight(), a.getY(), 1.0f); // unity
-    // transfer curve of the wet path for input -1..+1 (drive applied, output-compensated)
-    const float drv = std::pow (10.0f, bm::Shaper::driveDb (p.sat.drivePct) / 20.0f);
-    const float mix = p.sat.mixPct * 0.01f;
-    juce::Path curve;
-    for (int i = 0; i <= 200; ++i)
-    {
-        const float x = -1.0f + 2.0f * i / 200.0f;
-        const float wet = bm::Shaper::curve (p.sat.style, x * drv) / drv;
-        const float y = x + mix * (wet - x);
-        const float px = a.getX() + (x + 1) * 0.5f * a.getWidth();
-        const float py = a.getBottom() - (juce::jlimit (-1.2f, 1.2f, y) + 1) * 0.5f * a.getHeight();
-        if (i == 0) curve.startNewSubPath (px, py); else curve.lineTo (px, py);
-    }
-    g.setColour (theme::ice.withAlpha (0.3f));
-    g.strokePath (curve, juce::PathStrokeType (6.0f));
-    g.setColour (theme::ice);
-    g.strokePath (curve, juce::PathStrokeType (2.2f));
-    g.setColour (theme::textOnDark.withAlpha (0.6f));
-    g.setFont (theme::font (11.0f));
-    g.drawText ("TRANSFER CURVE  |  " + bmp::satStyleNames()[(int) p.sat.style].toUpperCase() + "  |  DRIVE " + juce::String (p.sat.drivePct, 1) + " %  |  MIX " + juce::String (p.sat.mixPct, 0) + " %",
-                b.reduced (12, 6).removeFromTop (16), juce::Justification::centredLeft);
-    g.drawText ("OVERSAMPLING " + bmp::osNames()[p.sat.osFactorLog2] + "  |  LINEAR-PHASE FIR", b.reduced (12, 6).removeFromBottom (16), juce::Justification::centredRight);
-}
-
-SatPage::SatPage (BankMasterProcessor& p)
-    : curve (p),
-      style (p.getState(), bmp::id::satStyle, "Style"), os (p.getState(), bmp::id::satOs, "Oversampling"),
-      hq (p.getState(), bmp::id::satHq, "HIGH QUALITY"),
-      drive (p.getState(), bmp::id::satDrive, "Drive"), mix (p.getState(), bmp::id::satMix, "Mix"),
-      tone (p.getState(), bmp::id::satTone, "Tone"), dyn (p.getState(), bmp::id::satDyn, "Dynamics"),
-      fb (p.getState(), bmp::id::satFb, "Feedback"), fbFreq (p.getState(), bmp::id::satFbFreq, "FB Freq"),
-      out (p.getState(), bmp::id::satOut, "Output")
-{
-    for (juce::Component* c : { (juce::Component*) &curve, (juce::Component*) &style, (juce::Component*) &os, (juce::Component*) &hq,
-                                (juce::Component*) &drive, (juce::Component*) &mix, (juce::Component*) &tone, (juce::Component*) &dyn,
-                                (juce::Component*) &fb, (juce::Component*) &fbFreq, (juce::Component*) &out })
+    addAndMakeVisible (display);
+    style.bind (prm (bmp::id::satStyle), um());
+    drive.bind (prm (bmp::id::satDrive), um());
+    mix.bind (prm (bmp::id::satMix), um());
+    tone.bind (prm (bmp::id::satTone), um());
+    dyn.bind (prm (bmp::id::satDyn), um());
+    fb.bind (prm (bmp::id::satFb), um());
+    fbFreq.bind (prm (bmp::id::satFbFreq), um());
+    out.bind (prm (bmp::id::satOut), um());
+    os.bind (prm (bmp::id::satOs), um());
+    hq.bind (prm (bmp::id::satHq), um());
+    const auto mc = P().module[1];
+    for (auto* k : { &drive, &mix, &tone, &dyn, &fb, &fbFreq, &out }) k->setAccent (mc);
+    style.setAccent (mc);
+    os.setAccent (mc);
+    hq.setOnColour (mc);
+    hq.setTooltip ("High-quality (steeper) oversampling filters");
+    for (auto* c : std::initializer_list<juce::Component*> { &style, &drive, &mix, &tone, &dyn, &fb, &fbFreq, &out, &osCap, &os, &hq })
         addAndMakeVisible (c);
 }
 
 void SatPage::paint (juce::Graphics& g)
 {
-    auto r = getLocalBounds();
-    r.removeFromLeft (r.getWidth() * 42 / 100 + 10);
-    theme::drawPanel (g, r.toFloat());
-    sectionTitle (g, r.reduced (16, 0).removeFromTop (30), "MASTER SATURATION");
+    const auto& p = P();
+    const auto mc = p.module[1];
+    paintDeck (g);
+    auto deck = deckArea.reduced (18, 14);
+    Titles::draw (g, deck.withWidth (200).withHeight (18), "STYLE", mc);
+    Titles::draw (g, Rectangle<int> (deck.getX() + 334, deck.getY(), 200, 18), "SATURATE", mc);
+    Titles::draw (g, Rectangle<int> (deck.getX() + 598, deck.getY(), 200, 18), "SHAPE & BLEND", mc);
+    Titles::draw (g, Rectangle<int> (deck.getRight() - 190, deck.getY(), 190, 18), "QUALITY", mc);
+    deckDivider (g, deck.getX() + 320);
+    deckDivider (g, deck.getX() + 584);
+    deckDivider (g, deck.getRight() - 210);
+    const auto sp = proc.getCurrentParams().sat;
+    const int F = 1 << sp.osFactorLog2;
+    g.setColour (p.textMute);
+    g.setFont (font (type::small, Fonts::Medium, 0.04f));
+    g.drawText (sp.osFactorLog2 == 0 ? String ("NO OVERSAMPLING") : String ("LINEAR PHASE  ") + String (juce::CharPointer_UTF8 ("\xc2\xb7")) + "  " + String (F) + "x",
+                Rectangle<int> (deck.getRight() - 190, deck.getY() + 128, 190, 16), juce::Justification::centredLeft, false);
 }
 
 void SatPage::resized()
 {
     auto r = getLocalBounds();
-    curve.setBounds (r.removeFromLeft (r.getWidth() * 42 / 100));
-    r.removeFromLeft (10);
-    auto c = r.reduced (16, 12);
-    c.removeFromTop (22);
-    auto top = c.removeFromTop (46);
-    style.setBounds (top.removeFromLeft (180)); top.removeFromLeft (12);
-    os.setBounds (top.removeFromLeft (140)); top.removeFromLeft (12);
-    hq.setBounds (top.removeFromLeft (130).withTrimmedTop (16));
-    c.removeFromTop (12);
-    auto big = c.removeFromLeft (c.getWidth() / 3);
-    drive.setBounds (big.withSizeKeepingCentre (juce::jmin (big.getWidth(), 210), juce::jmin (big.getHeight(), 230)));
-    auto rows = c;
-    auto row1 = rows.removeFromTop (rows.getHeight() / 2);
-    layoutRow (row1.reduced (4), { &mix, &tone, &dyn }, 8);
-    layoutRow (rows.reduced (4), { &fb, &fbFreq, &out }, 8);
+    display.setBounds (r.removeFromTop (juce::roundToInt (r.getHeight() * 0.58f)));
+    r.removeFromTop (12);
+    deckArea = r;
+    auto deck = r.reduced (18, 14);
+    auto c1 = deck.removeFromLeft (300);
+    c1.removeFromTop (28);
+    style.setBounds (c1);
+    deck.removeFromLeft (34);
+    auto hero = deck.removeFromLeft (230);
+    hero.removeFromTop (20);
+    drive.setBounds (hero);
+    deck.removeFromLeft (34);
+    auto c4 = deck.removeFromRight (190);
+    deck.removeFromRight (40);
+    c4.removeFromTop (28);
+    osCap.setBounds (c4.removeFromTop (16));
+    os.setBounds (c4.removeFromTop (28));
+    c4.removeFromTop (12);
+    hq.setBounds (c4.removeFromTop (28).withWidth (150));
+    deck.removeFromTop (22);
+    auto rowA = deck.removeFromTop (deck.getHeight() / 2).withTrimmedBottom (4), rowB = deck.withTrimmedTop (4);
+    layoutKnobs (rowA, { &mix, &tone, &dyn });
+    layoutKnobs (rowB, { &fb, &fbFreq, &out });
 }
+
+juce::Array<juce::Component*> SatPage::getBoundControls() { return { &style, &drive, &mix, &tone, &dyn, &fb, &fbFreq, &out, &os, &hq }; }
 
 // ============================================================================ COMPRESSOR
-void CompDisplay::tick()
+CompPage::CompPage (BankMasterProcessor& p) : Page (p), display (p)
 {
-    gr.push (proc.getChain().getCompGainReduction());
-    level.push (juce::Decibels::gainToDecibels (juce::jmax (proc.getChain().getOutputMeter().getPeak (0), proc.getChain().getOutputMeter().getPeak (1)), -60.0f));
-    repaint();
-}
-
-void CompDisplay::paint (juce::Graphics& g)
-{
-    const auto b = getLocalBounds().toFloat();
-    theme::drawDisplay (g, b);
-    const auto p = bm::applyOneMaster (proc.getCurrentParams());
-
-    // transfer curve (square, left)
-    auto sq = b.reduced (16.0f);
-    sq = sq.withWidth (sq.getHeight());
-    g.setColour (theme::grid);
-    for (int i = 1; i < 6; ++i)
-    {
-        g.drawVerticalLine ((int) (sq.getX() + sq.getWidth() * i / 6), sq.getY(), sq.getBottom());
-        g.drawHorizontalLine ((int) (sq.getY() + sq.getHeight() * i / 6), sq.getX(), sq.getRight());
-    }
-    auto toX = [&] (float db) { return sq.getX() + (db + 60.0f) / 60.0f * sq.getWidth(); };
-    auto toY = [&] (float db) { return sq.getBottom() - (db + 60.0f) / 60.0f * sq.getHeight(); };
-    g.setColour (theme::gridStrong);
-    g.drawLine (toX (-60), toY (-60), toX (0), toY (0), 1.0f);
-    juce::Path c;
-    for (int i = 0; i <= 240; ++i)
-    {
-        const float x = -60.0f + 60.0f * i / 240.0f;
-        const float y = x - juce::jmin (p.comp.rangeDb, bm::CompCurve::gainReductionDb (x, p.comp.thresholdDb, p.comp.ratio, p.comp.kneeDb));
-        if (i == 0) c.startNewSubPath (toX (x), toY (y)); else c.lineTo (toX (x), toY (y));
-    }
-    g.setColour (theme::ice);
-    g.strokePath (c, juce::PathStrokeType (2.2f));
-    g.setColour (theme::warn.withAlpha (0.6f));
-    const float tx = toX (p.comp.thresholdDb);
-    for (float y = sq.getY(); y < sq.getBottom(); y += 6) g.drawLine (tx, y, tx, y + 3, 1.0f);
-    g.setColour (theme::textOnDark.withAlpha (0.6f));
-    g.setFont (theme::font (10.5f));
-    g.drawText ("THR " + juce::String (p.comp.thresholdDb, 1) + " dB   " + juce::String (p.comp.ratio, 2) + ":1   KNEE " + juce::String (p.comp.kneeDb, 1),
-                sq.withHeight (16).translated (4, 2), juce::Justification::centredLeft);
-
-    // gain-reduction history (right)
-    auto h = b.reduced (16.0f).withTrimmedLeft (sq.getWidth() + 18.0f);
-    g.setColour (theme::grid);
-    for (int db = 3; db <= 12; db += 3)
-    {
-        const float y = h.getY() + h.getHeight() * db / 15.0f;
-        g.drawHorizontalLine ((int) y, h.getX(), h.getRight());
-        g.drawText ("-" + juce::String (db), juce::Rectangle<float> (h.getRight() - 24, y - 7, 22, 14), juce::Justification::centredRight);
-    }
-    juce::Path lv, grp;
-    for (int i = 0; i < History::kLen; ++i)
-    {
-        const float x = h.getX() + h.getWidth() * i / (History::kLen - 1);
-        const float ly = h.getBottom() - (juce::jmax (-60.0f, level.at (i)) + 60.0f) / 60.0f * h.getHeight();
-        const float gy = h.getY() + juce::jmin (15.0f, gr.at (i)) / 15.0f * h.getHeight();
-        if (i == 0) { lv.startNewSubPath (x, h.getBottom()); lv.lineTo (x, ly); grp.startNewSubPath (x, gy); }
-        else { lv.lineTo (x, ly); grp.lineTo (x, gy); }
-    }
-    lv.lineTo (h.getRight(), h.getBottom()); lv.closeSubPath();
-    g.setColour (theme::ice.withAlpha (0.16f));
-    g.fillPath (lv);
-    g.setColour (theme::danger);
-    g.strokePath (grp, juce::PathStrokeType (2.0f));
-    g.setColour (theme::textOnDark.withAlpha (0.6f));
-    g.drawText ("GAIN REDUCTION  " + juce::String (juce::jmax (0.0f, gr.at (History::kLen - 1)), 1) + " dB", h.withHeight (16), juce::Justification::centredLeft);
-}
-
-CompPage::CompPage (BankMasterProcessor& p)
-    : display (p),
-      style (p.getState(), bmp::id::compStyle, "Style"),
-      autoGain (p.getState(), bmp::id::compAutoGain, "AUTO GAIN"), autoRel (p.getState(), bmp::id::compAutoRel, "AUTO RELEASE"),
-      thr (p.getState(), bmp::id::compThr, "Threshold"), ratio (p.getState(), bmp::id::compRatio, "Ratio"),
-      knee (p.getState(), bmp::id::compKnee, "Knee"), att (p.getState(), bmp::id::compAtt, "Attack"),
-      rel (p.getState(), bmp::id::compRel, "Release"), range (p.getState(), bmp::id::compRange, "Range"),
-      hold (p.getState(), bmp::id::compHold, "Hold"), la (p.getState(), bmp::id::compLa, "Lookahead"),
-      makeup (p.getState(), bmp::id::compMakeup, "Makeup"), mix (p.getState(), bmp::id::compMix, "Dry/Wet"),
-      scHp (p.getState(), bmp::id::compScHp, "SC HP"), scLp (p.getState(), bmp::id::compScLp, "SC LP"),
-      link (p.getState(), bmp::id::compLink, "St. Link")
-{
-    for (juce::Component* c : { (juce::Component*) &display, (juce::Component*) &style, (juce::Component*) &autoGain, (juce::Component*) &autoRel,
-                                (juce::Component*) &thr, (juce::Component*) &ratio, (juce::Component*) &knee, (juce::Component*) &att,
-                                (juce::Component*) &rel, (juce::Component*) &range, (juce::Component*) &hold, (juce::Component*) &la,
-                                (juce::Component*) &makeup, (juce::Component*) &mix, (juce::Component*) &scHp, (juce::Component*) &scLp,
-                                (juce::Component*) &link })
+    addAndMakeVisible (display);
+    style.bind (prm (bmp::id::compStyle), um());
+    thr.bind (prm (bmp::id::compThr), um());
+    ratio.bind (prm (bmp::id::compRatio), um());
+    att.bind (prm (bmp::id::compAtt), um());
+    rel.bind (prm (bmp::id::compRel), um());
+    knee.bind (prm (bmp::id::compKnee), um());
+    range.bind (prm (bmp::id::compRange), um());
+    hold.bind (prm (bmp::id::compHold), um());
+    la.bind (prm (bmp::id::compLa), um());
+    makeup.bind (prm (bmp::id::compMakeup), um());
+    mix.bind (prm (bmp::id::compMix), um());
+    autoGain.bind (prm (bmp::id::compAutoGain), um());
+    autoRel.bind (prm (bmp::id::compAutoRel), um());
+    scHp.bind (prm (bmp::id::compScHp), um());
+    scLp.bind (prm (bmp::id::compScLp), um());
+    link.bind (prm (bmp::id::compLink), um());
+    const auto mc = P().module[2];
+    for (auto* k : { &thr, &ratio, &att, &rel, &knee, &range, &hold, &la, &makeup, &mix, &scHp, &scLp, &link }) k->setAccent (mc);
+    style.setAccent (mc);
+    autoGain.setTooltip ("Automatic make-up gain (added to MAKEUP)");
+    autoRel.setTooltip ("Program-dependent release");
+    makeup.setTooltip ("Make-up gain (added to the automatic make-up when AUTO GAIN is on)");
+    for (auto* c : std::initializer_list<juce::Component*> { &styleCap, &style, &thr, &ratio, &att, &rel, &knee, &range, &hold, &la, &makeup, &mix,
+                                                             &autoGain, &autoRel, &scHp, &scLp, &link })
         addAndMakeVisible (c);
+}
+
+void CompPage::tick()
+{
+    display.tick();
 }
 
 void CompPage::paint (juce::Graphics& g)
 {
-    auto r = getLocalBounds();
-    r.removeFromTop (r.getHeight() * 45 / 100 + 10);
-    theme::drawPanel (g, r.toFloat());
-    sectionTitle (g, r.reduced (16, 0).removeFromTop (28), "MASTER COMPRESSOR");
+    const auto mc = P().module[2];
+    paintDeck (g);
+    auto deck = deckArea.reduced (18, 14);
+    const int primW = juce::roundToInt (deck.getWidth() * 0.47f);
+    Titles::draw (g, deck.withWidth (200).withHeight (18), "DYNAMICS", mc);
+    Titles::draw (g, Rectangle<int> (deck.getX() + primW + 36, deck.getY(), 200, 18), "SHAPE", mc);
+    Titles::draw (g, Rectangle<int> (deck.getRight() - 196, deck.getY(), 196, 18), "AUTO", mc);
+    Titles::draw (g, Rectangle<int> (deck.getRight() - 196, deck.getY() + 108, 196, 18), "SIDECHAIN", mc);
+    deckDivider (g, deck.getX() + primW + 18);
+    deckDivider (g, deck.getRight() - 214);
 }
 
 void CompPage::resized()
 {
     auto r = getLocalBounds();
-    display.setBounds (r.removeFromTop (r.getHeight() * 45 / 100));
-    r.removeFromTop (10);
-    auto c = r.reduced (16, 8);
-    c.removeFromTop (20);
-    auto left = c.removeFromLeft (170);
-    style.setBounds (left.removeFromTop (46));
-    left.removeFromTop (10);
-    autoGain.setBounds (left.removeFromTop (30)); left.removeFromTop (8);
-    autoRel.setBounds (left.removeFromTop (30));
-    c.removeFromLeft (14);
-    auto row1 = c.removeFromTop (c.getHeight() / 2);
-    layoutRow (row1, { &thr, &ratio, &knee, &att, &rel, &range }, 8);
-    layoutRow (c, { &hold, &la, &makeup, &mix, &scHp, &scLp, &link }, 8);
+    auto disp = r.removeFromTop (juce::roundToInt (r.getHeight() * 0.58f));
+    display.setBounds (disp);
+    r.removeFromTop (12);
+    deckArea = r;
+    auto tb = disp.reduced (14, 10).removeFromTop (24);
+    style.setBounds (tb.removeFromRight (240));
+    styleCap.setBounds (tb.removeFromRight (70).withTrimmedRight (8));
+
+    auto deck = r.reduced (18, 14);
+    auto prim = deck.removeFromLeft (juce::roundToInt (deck.getWidth() * 0.47f));
+    prim.removeFromTop (24);
+    layoutKnobs (prim, { &thr, &ratio, &att, &rel });
+    deck.removeFromLeft (36);
+    auto side = deck.removeFromRight (196);
+    deck.removeFromRight (36);
+    side.removeFromTop (26);
+    autoGain.setBounds (side.removeFromTop (28));
+    side.removeFromTop (8);
+    autoRel.setBounds (side.removeFromTop (28));
+    side.removeFromTop (44);
+    layoutKnobs (side, { &scHp, &scLp, &link }, 3, 2);
+    deck.removeFromTop (22);
+    auto rowA = deck.removeFromTop (deck.getHeight() / 2).withTrimmedBottom (4), rowB = deck.withTrimmedTop (4);
+    layoutKnobs (rowA, { &knee, &range, &hold });
+    layoutKnobs (rowB, { &la, &makeup, &mix });
+}
+
+juce::Array<juce::Component*> CompPage::getBoundControls()
+{
+    return { &style, &thr, &ratio, &att, &rel, &knee, &range, &hold, &la, &makeup, &mix, &autoGain, &autoRel, &scHp, &scLp, &link };
 }
 
 // ============================================================================ LIMITER
-void LimDisplay::tick()
+LimPage::LimPage (BankMasterProcessor& p) : Page (p), display (p)
 {
-    gr.push (proc.getChain().getLimGainReduction());
-    out.push (juce::Decibels::gainToDecibels (juce::jmax (proc.getChain().getOutputMeter().getPeak (0), proc.getChain().getOutputMeter().getPeak (1)), -48.0f));
-    repaint();
-}
-
-void LimDisplay::paint (juce::Graphics& g)
-{
-    const auto b = getLocalBounds().toFloat();
-    theme::drawDisplay (g, b);
-    const auto a = b.reduced (14.0f).withTrimmedRight (30);
-    const auto p = proc.getCurrentParams();
-    auto toY = [&] (float db) { return a.getY() + (-db / 36.0f) * a.getHeight(); }; // 0 .. -36 dB
-    g.setFont (theme::font (10.5f));
-    for (int db = 0; db >= -36; db -= 6)
-    {
-        g.setColour (theme::grid);
-        g.drawHorizontalLine ((int) toY ((float) db), a.getX(), a.getRight());
-        g.setColour (theme::textOnDark.withAlpha (0.5f));
-        g.drawText (juce::String (db), juce::Rectangle<float> (a.getRight() + 4, toY ((float) db) - 7, 28, 14), juce::Justification::centredLeft);
-    }
-    juce::Path o, gp;
-    for (int i = 0; i < History::kLen; ++i)
-    {
-        const float x = a.getX() + a.getWidth() * i / (History::kLen - 1);
-        const float oy = toY (juce::jmax (-36.0f, out.at (i)));
-        const float gy = toY (-juce::jmin (36.0f, gr.at (i)));
-        if (i == 0) { o.startNewSubPath (x, a.getBottom()); o.lineTo (x, oy); gp.startNewSubPath (x, gy); }
-        else { o.lineTo (x, oy); gp.lineTo (x, gy); }
-    }
-    o.lineTo (a.getRight(), a.getBottom()); o.closeSubPath();
-    g.setGradientFill (juce::ColourGradient (theme::ice.withAlpha (0.5f), 0, a.getY(), theme::iceDeep.withAlpha (0.08f), 0, a.getBottom(), false));
-    g.fillPath (o);
-    g.setColour (theme::danger);
-    g.strokePath (gp, juce::PathStrokeType (2.0f));
-    // ceiling line
-    g.setColour (theme::warn);
-    const float cy = toY (p.lim.ceilingDb);
-    g.drawLine (a.getX(), cy, a.getRight(), cy, 1.2f);
-    g.setColour (theme::textOnDark.withAlpha (0.7f));
-    g.drawText ("OUTPUT LEVEL  /  GAIN REDUCTION " + juce::String (juce::jmax (0.0f, gr.at (History::kLen - 1)), 1) + " dB  /  CEILING " + juce::String (p.lim.ceilingDb, 2) + (p.lim.truePeak ? " dBTP" : " dBFS"),
-                a.withHeight (16).translated (6, 2), juce::Justification::centredLeft);
-}
-
-LimPage::LimPage (BankMasterProcessor& p)
-    : proc (p), display (p),
-      style (p.getState(), bmp::id::limStyle, "Style"), os (p.getState(), bmp::id::limOs, "Oversampling"),
-      dither (p.getState(), bmp::id::limDither, "Dither"),
-      tp (p.getState(), bmp::id::limTp, "TRUE PEAK"),
-      gain (p.getState(), bmp::id::limGain, "Gain"), ceil (p.getState(), bmp::id::limCeil, "Ceiling"),
-      att (p.getState(), bmp::id::limAtt, "Attack"), rel (p.getState(), bmp::id::limRel, "Release"),
-      la (p.getState(), bmp::id::limLa, "Lookahead"), linkT (p.getState(), bmp::id::limLinkT, "Link Trans."),
-      linkR (p.getState(), bmp::id::limLinkR, "Link Release")
-{
-    for (juce::Component* c : { (juce::Component*) &display, (juce::Component*) &style, (juce::Component*) &os, (juce::Component*) &dither,
-                                (juce::Component*) &tp, (juce::Component*) &gain, (juce::Component*) &ceil, (juce::Component*) &att,
-                                (juce::Component*) &rel, (juce::Component*) &la, (juce::Component*) &linkT, (juce::Component*) &linkR })
+    addAndMakeVisible (display);
+    style.bind (prm (bmp::id::limStyle), um());
+    gain.bind (prm (bmp::id::limGain), um());
+    ceiling.bind (prm (bmp::id::limCeil), um());
+    att.bind (prm (bmp::id::limAtt), um());
+    rel.bind (prm (bmp::id::limRel), um());
+    la.bind (prm (bmp::id::limLa), um());
+    linkT.bind (prm (bmp::id::limLinkT), um());
+    linkR.bind (prm (bmp::id::limLinkR), um());
+    tp.bind (prm (bmp::id::limTp), um());
+    os.bind (prm (bmp::id::limOs), um());
+    dither.bind (prm (bmp::id::limDither), um());
+    style.setAccent (P().module[3]);
+    tp.setTooltip ("True-peak limiting (inter-sample peaks)");
+    os.setTooltip ("Oversampling of the true-peak stage");
+    for (auto* c : std::initializer_list<juce::Component*> { &styleCap, &style, &gain, &ceiling, &att, &rel, &la, &linkT, &linkR, &tp, &osCap, &os, &ditherCap, &dither })
         addAndMakeVisible (c);
-}
-
-void LimPage::tick()
-{
-    display.tick();
-    auto& l = proc.getChain().getLoudness();
-    lufsText[0] = fmtDb (l.getMomentary());
-    lufsText[1] = fmtDb (l.getShortTerm());
-    lufsText[2] = fmtDb (l.getIntegrated());
-    tpText = fmtDb (juce::Decibels::gainToDecibels (proc.getChain().getOutputMeter().getTruePeakMax(), -100.0f), 2);
-    const double fs = proc.getCurrentSampleRate();
-    latencyText = juce::String (proc.getLatencySamples()) + " smp / " + juce::String (proc.getLatencySamples() * 1000.0 / fs, 2) + " ms  |  OS " + juce::String (proc.getChain().getLimiterOsFactor()) + "x";
-    repaint (getLocalBounds().withTrimmedLeft (getWidth() * 62 / 100));
 }
 
 void LimPage::paint (juce::Graphics& g)
 {
-    auto r = getLocalBounds();
-    auto top = r.removeFromTop (r.getHeight() * 52 / 100);
-    r.removeFromTop (10);
-    theme::drawPanel (g, r.toFloat());
-    sectionTitle (g, r.reduced (16, 0).removeFromTop (28), "MASTER LIMITER");
-
-    // loudness panel
-    auto lp = top.removeFromRight (top.getWidth() * 38 / 100).withTrimmedLeft (10);
-    theme::drawPanel (g, lp.toFloat());
-    auto c = lp.reduced (16, 12);
-    sectionTitle (g, c.removeFromTop (18), "LOUDNESS  (EBU R128 / BS.1770-4)");
-    c.removeFromTop (6);
-    const char* names[] = { "MOMENTARY", "SHORT-TERM", "INTEGRATED" };
-    auto row = c.removeFromTop (78);
-    const int w = row.getWidth() / 3;
-    for (int i = 0; i < 3; ++i)
-    {
-        auto cell = row.removeFromLeft (w);
-        g.setColour (theme::textDim);
-        g.setFont (theme::font (11.0f, true));
-        g.drawText (names[i], cell.removeFromTop (16), juce::Justification::centred);
-        g.setColour (i == 2 ? theme::iceDeep : theme::text);
-        g.setFont (theme::font (i == 2 ? 30.0f : 24.0f, true));
-        g.drawText (lufsText[i], cell.removeFromTop (38), juce::Justification::centred);
-        g.setColour (theme::textDim);
-        g.setFont (theme::font (11.0f));
-        g.drawText ("LUFS", cell, juce::Justification::centredTop);
-    }
-    c.removeFromTop (8);
-    auto tpRow = c.removeFromTop (54);
-    g.setColour (theme::textDim);
-    g.setFont (theme::font (11.0f, true));
-    g.drawText ("TRUE PEAK (MAX)", tpRow.removeFromTop (16), juce::Justification::centredLeft);
-    const float tpv = tpText.getFloatValue();
-    g.setColour (tpv > proc.getCurrentParams().lim.ceilingDb + 0.05f ? theme::danger : theme::text);
-    g.setFont (theme::font (26.0f, true));
-    g.drawText (tpText + " dBTP", tpRow, juce::Justification::centredLeft);
-    g.setColour (theme::textDim);
-    g.setFont (theme::font (11.0f));
-    g.drawText ("LATENCY " + latencyText, c.removeFromTop (18), juce::Justification::centredLeft);
+    const auto mc = P().module[3];
+    paintDeck (g);
+    auto deck = deckArea.reduced (18, 14);
+    Titles::draw (g, deck.withWidth (200).withHeight (18), "DRIVE", mc);
+    Titles::draw (g, Rectangle<int> (deck.getX() + 262, deck.getY(), 150, 18), "CEILING", mc);
+    Titles::draw (g, Rectangle<int> (deck.getX() + 444, deck.getY(), 200, 18), "ENVELOPE & LINK", mc);
+    Titles::draw (g, Rectangle<int> (deck.getRight() - 210, deck.getY(), 210, 18), "TRUE PEAK & OUTPUT", mc);
+    deckDivider (g, deck.getX() + 246);
+    deckDivider (g, deck.getX() + 428);
+    deckDivider (g, deck.getRight() - 228);
 }
 
 void LimPage::resized()
 {
     auto r = getLocalBounds();
-    auto top = r.removeFromTop (r.getHeight() * 52 / 100);
-    display.setBounds (top.removeFromLeft (top.getWidth() * 62 / 100));
-    r.removeFromTop (10);
-    auto c = r.reduced (16, 8);
-    c.removeFromTop (20);
-    auto left = c.removeFromLeft (360);
-    auto l1 = left.removeFromTop (46);
-    style.setBounds (l1.removeFromLeft (170)); l1.removeFromLeft (10);
-    os.setBounds (l1);
-    left.removeFromTop (10);
-    auto l2 = left.removeFromTop (46);
-    dither.setBounds (l2.removeFromLeft (170)); l2.removeFromLeft (10);
-    tp.setBounds (l2.withTrimmedTop (16));
-    c.removeFromLeft (14);
-    layoutRow (c, { &gain, &ceil, &att, &rel, &la, &linkT, &linkR }, 8);
+    auto disp = r.removeFromTop (juce::roundToInt (r.getHeight() * 0.58f));
+    display.setBounds (disp);
+    r.removeFromTop (12);
+    deckArea = r;
+    auto tb = disp.reduced (14, 10).removeFromTop (24);
+    style.setBounds (tb.removeFromRight (380));
+    styleCap.setBounds (tb.removeFromRight (70).withTrimmedRight (8));
+
+    auto deck = r.reduced (18, 14);
+    auto hero = deck.removeFromLeft (230);
+    hero.removeFromTop (20);
+    gain.setBounds (hero);
+    deck.removeFromLeft (32);
+    auto ceil = deck.removeFromLeft (150);
+    ceil.removeFromTop (34);
+    ceiling.setBounds (ceil);
+    deck.removeFromLeft (32);
+    auto side = deck.removeFromRight (210);
+    deck.removeFromRight (36);
+    side.removeFromTop (26);
+    tp.setBounds (side.removeFromTop (28).withWidth (150));
+    side.removeFromTop (10);
+    osCap.setBounds (side.removeFromTop (16));
+    os.setBounds (side.removeFromTop (28));
+    side.removeFromTop (8);
+    ditherCap.setBounds (side.removeFromTop (16));
+    dither.setBounds (side.removeFromTop (26));
+    deck.removeFromTop (22);
+    auto rowA = deck.removeFromTop (deck.getHeight() / 2).withTrimmedBottom (4), rowB = deck.withTrimmedTop (4);
+    layoutKnobs (rowA, { &att, &rel, &la });
+    layoutKnobs (rowB, { &linkT, &linkR }, 3);
 }
+
+juce::Array<juce::Component*> LimPage::getBoundControls()
+{
+    return { &style, &gain, &ceiling, &att, &rel, &la, &linkT, &linkR, &tp, &os, &dither };
+}
+
+} // namespace bmui

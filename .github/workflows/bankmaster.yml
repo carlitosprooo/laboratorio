@@ -10,8 +10,13 @@ on:
       - "BANKMASTER/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read     # download the released V1 artifacts (run #8) for the V1 x V2 comparison
+
 env:
   PLUGINVAL_VERSION: v1.0.4
+  V1_RUN_ID: "39829983406"   # run #8: BANKMASTER 1.0.0 installers
   VST3SDK_TAG: v3.7.12_build_20
   VST3SDK_OPTS: -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=ON -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF -DSMTG_RUN_VST_VALIDATOR=OFF
 
@@ -48,10 +53,31 @@ jobs:
           softwareupdate --install-rosetta --agree-to-license >/dev/null 2>&1 || true
           arch -x86_64 ./build/bankmaster_dsp_tests | tee dsp_tests_macos_x86_64.txt
 
-      - name: Plugin tests (state, presets, A/B, undo, automation, editor snapshots)
+      - name: Plugin tests (state, presets, A/B, undo, automation, V2 UI bindings, sizes, Retina snapshots)
         run: |
           mkdir -p snapshots
           ./build/bankmaster_plugin_tests_artefacts/Release/bankmaster_plugin_tests --snapshot snapshots | tee plugin_tests_macos.txt
+          grep -q " 0 failures" plugin_tests_macos.txt
+
+      - name: Identity (vendor "Kalox Audio", unchanged plug-in IDs, app icon)
+        run: |
+          ART=build/BankMaster_artefacts/Release
+          HC=build/bankmaster_hostcheck_artefacts/Release/bankmaster_hostcheck
+          R=identity_macos.txt
+          grep -E '"(Name|Vendor|Version|CID)"' $ART/VST3/BANKMASTER.vst3/Contents/Resources/moduleinfo.json | tee $R
+          grep -q '"Vendor": "Kalox Audio"' $ART/VST3/BANKMASTER.vst3/Contents/Resources/moduleinfo.json
+          grep -q '"CID": "ABCDEF019182FAEB4B6C6F78426B6D73"' $ART/VST3/BANKMASTER.vst3/Contents/Resources/moduleinfo.json   # same class ID as 1.0
+          PB=/usr/libexec/PlistBuddy
+          for k in name manufacturer subtype type version; do echo "AU $k: $($PB -c "Print :AudioComponents:0:$k" $ART/AU/BANKMASTER.component/Contents/Info.plist)"; done | tee -a $R
+          test "$($PB -c 'Print :AudioComponents:0:name' $ART/AU/BANKMASTER.component/Contents/Info.plist)" = "Kalox Audio: BANKMASTER"
+          test "$($PB -c 'Print :AudioComponents:0:manufacturer' $ART/AU/BANKMASTER.component/Contents/Info.plist)" = "Klox"
+          test "$($PB -c 'Print :AudioComponents:0:subtype' $ART/AU/BANKMASTER.component/Contents/Info.plist)" = "Bkms"
+          for b in VST3/BANKMASTER.vst3 AU/BANKMASTER.component Standalone/BANKMASTER.app; do echo "$b bundle id: $($PB -c 'Print :CFBundleIdentifier' $ART/$b/Contents/Info.plist)"; done | tee -a $R
+          test -f $ART/Standalone/BANKMASTER.app/Contents/Resources/Icon.icns
+          echo "Standalone icon: $($PB -c 'Print :CFBundleIconFile' $ART/Standalone/BANKMASTER.app/Contents/Info.plist) ($(stat -f%z $ART/Standalone/BANKMASTER.app/Contents/Resources/Icon.icns) bytes)" | tee -a $R
+          sips -s format png $ART/Standalone/BANKMASTER.app/Contents/Resources/Icon.icns --out snapshots/standalone_app_icon_macos.png >/dev/null
+          $HC describe $ART/VST3/BANKMASTER.vst3 | tee -a $R
+          grep -q "manufacturer=Kalox Audio" $R
 
       - name: Audio Unit validation (auval, arm64 + x86_64)
         run: |
@@ -59,7 +85,8 @@ jobs:
           cp -R build/BankMaster_artefacts/Release/AU/BANKMASTER.component ~/Library/Audio/Plug-Ins/Components/
           killall -9 AudioComponentRegistrar 2>/dev/null || true
           sleep 3
-          auval -a | grep -i kalox || true
+          auval -a | grep -i kalox | tee auval_list.txt || true
+          grep -q "Kalox Audio: BANKMASTER" auval_list.txt
           auval -strict -v aufx Bkms Klox | tee auval_arm64.txt
           arch -x86_64 auval -strict -v aufx Bkms Klox | tee auval_x86_64.txt
           grep -q "AU VALIDATION SUCCEEDED" auval_arm64.txt
@@ -100,13 +127,13 @@ jobs:
         run: |
           python3 -m venv dmgenv
           dmgenv/bin/pip install -q dmgbuild
-          PATH="$PWD/dmgenv/bin:$PATH" BANKMASTER/installer/macos/dmg/build_dmg.sh "$PWD/BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-macOS-universal.pkg"
+          PATH="$PWD/dmgenv/bin:$PATH" BANKMASTER/installer/macos/dmg/build_dmg.sh "$PWD/BANKMASTER/dist/BANKMASTER-BY-KALOX-2.0.0-macOS-universal.pkg"
           ls -la BANKMASTER/dist
 
       - name: Verify DMG + real install / uninstall test
         run: |
-          DMG=BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-macOS-Universal.dmg
-          PKG=BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-macOS-universal.pkg
+          DMG=BANKMASTER/dist/BANKMASTER-BY-KALOX-2.0.0-macOS-Universal.dmg
+          PKG=BANKMASTER/dist/BANKMASTER-BY-KALOX-2.0.0-macOS-universal.pkg
           R=dmg_test_report.txt
           echo "== hdiutil verify" | tee $R
           hdiutil verify "$DMG" 2>&1 | tee -a $R
@@ -171,13 +198,84 @@ jobs:
           echo "installer receipts removed" | tee -a $R
           hdiutil detach "$MNT"
 
+      - name: Download the released 1.0.0 DMG (run #8)
+        uses: actions/download-artifact@v4
+        with:
+          name: BANKMASTER-by-KALOX-1.0.0-macOS-Universal-DMG
+          path: v1dmg
+          run-id: ${{ env.V1_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: V1 x V2 audio null test (VST3 + AU, arm64 + x86_64) and real upgrade 1.0 -> 2.0
+        run: |
+          HC=$PWD/build/bankmaster_hostcheck_artefacts/Release/bankmaster_hostcheck
+          R=upgrade_and_null_test_macos.txt
+          VST=/Library/Audio/Plug-Ins/VST3/BANKMASTER.vst3
+          AU=/Library/Audio/Plug-Ins/Components/BANKMASTER.component
+          PB=/usr/libexec/PlistBuddy
+          rm -rf ~/Library/Audio/Plug-Ins/Components/BANKMASTER.component
+          V1DMG=$(ls v1dmg/*.dmg | head -1)
+          shasum -a 256 "$V1DMG" | tee $R
+          M1="$(mktemp -d)/v1"; mkdir -p "$M1"
+          hdiutil attach "$V1DMG" -nobrowse -readonly -mountpoint "$M1" >/dev/null
+          echo "== install the released 1.0.0" | tee -a $R
+          sudo installer -pkg "$M1/Install BANKMASTER.pkg" -target / 2>&1 | tee -a $R
+          killall -9 AudioComponentRegistrar 2>/dev/null || true; sleep 3
+          echo "1.0 VST3 version: $($PB -c 'Print :CFBundleShortVersionString' $VST/Contents/Info.plist)" | tee -a $R
+          "$HC" describe $VST | tee v1_vst3_description.txt | tee -a $R
+          "$HC" describe $AU | tee v1_au_description.txt | tee -a $R
+          "$HC" render $VST nt_v1_vst3_arm64
+          "$HC" render $AU nt_v1_au_arm64
+          arch -x86_64 "$HC" render $VST nt_v1_vst3_x86_64
+          arch -x86_64 "$HC" render $AU nt_v1_au_x86_64
+
+          echo "== upgrade: install 2.0.0 over 1.0.0" | tee -a $R
+          M2="$(mktemp -d)/v2"; mkdir -p "$M2"
+          hdiutil attach BANKMASTER/dist/BANKMASTER-BY-KALOX-2.0.0-macOS-Universal.dmg -nobrowse -readonly -mountpoint "$M2" >/dev/null
+          sudo installer -pkg "$M2/Install BANKMASTER.pkg" -target / 2>&1 | tee -a $R
+          killall -9 AudioComponentRegistrar 2>/dev/null || true; sleep 3
+          for b in $VST $AU /Applications/BANKMASTER.app; do echo "$b -> $($PB -c 'Print :CFBundleShortVersionString' $b/Contents/Info.plist)"; done | tee -a $R
+          test "$($PB -c 'Print :CFBundleShortVersionString' $VST/Contents/Info.plist)" = "2.0.0"
+          test "$($PB -c 'Print :CFBundleShortVersionString' $AU/Contents/Info.plist)" = "2.0.0"
+          test "$($PB -c 'Print :CFBundleShortVersionString' /Applications/BANKMASTER.app/Contents/Info.plist)" = "2.0.0"
+          pkgutil --pkg-info com.kalox.bankmaster.vst3 | tee -a $R
+          "$HC" describe $VST | tee v2_vst3_description.txt | tee -a $R
+          "$HC" describe $AU | tee v2_au_description.txt | tee -a $R
+          grep -q "manufacturer=Kalox Audio" v2_vst3_description.txt
+          grep -q "manufacturer=Kalox Audio" v2_au_description.txt
+          # same plug-in identity before and after (what projects store)
+          for f in vst3 au; do
+            diff <(grep -E "^(name|uniqueId|deprecatedUid|format)=" v1_${f}_description.txt) <(grep -E "^(name|uniqueId|deprecatedUid|format)=" v2_${f}_description.txt)
+            echo "$f: name / uniqueId / deprecatedUid unchanged 1.0 -> 2.0" | tee -a $R
+          done
+          auval -strict -v aufx Bkms Klox > auval_after_upgrade.txt
+          grep "AU VALIDATION SUCCEEDED" auval_after_upgrade.txt | tee -a $R
+
+          "$HC" render $VST nt_v2_vst3_arm64 --state-from nt_v1_vst3_arm64
+          "$HC" render $AU nt_v2_au_arm64 --state-from nt_v1_au_arm64
+          arch -x86_64 "$HC" render $VST nt_v2_vst3_x86_64 --state-from nt_v1_vst3_x86_64
+          arch -x86_64 "$HC" render $AU nt_v2_au_x86_64 --state-from nt_v1_au_x86_64
+          ok=0
+          for c in vst3_arm64 au_arm64 vst3_x86_64 au_x86_64; do
+            echo "== V1 x V2 null test: $c" | tee -a $R
+            "$HC" compare nt_v1_$c nt_v2_$c | tee null_test_$c.txt | tee -a $R || ok=1
+          done
+
+          echo "== uninstall 2.0.0 (DMG uninstaller)" | tee -a $R
+          "$M2/Uninstall BANKMASTER.command" --yes 2>&1 | tee -a $R
+          test ! -e $VST && test ! -e $AU && test ! -e /Applications/BANKMASTER.app
+          test "$(pkgutil --pkgs | grep -c com.kalox.bankmaster || true)" = "0"
+          echo "system clean after uninstall" | tee -a $R
+          hdiutil detach "$M1"; hdiutil detach "$M2"
+          exit $ok
+
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: BANKMASTER-by-KALOX-1.0.0-macOS-Universal-DMG
+          name: BANKMASTER-BY-KALOX-2.0.0-macOS-Universal-DMG
           path: |
-            BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-macOS-Universal.dmg
-            BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-macOS-Universal.dmg.sha256
+            BANKMASTER/dist/BANKMASTER-BY-KALOX-2.0.0-macOS-Universal.dmg
+            BANKMASTER/dist/BANKMASTER-BY-KALOX-2.0.0-macOS-Universal.dmg.sha256
 
       - name: Package bundles
         run: |
@@ -203,6 +301,7 @@ jobs:
             *.txt
             snapshots/*.png
             install_diff.txt
+            nt_*/*.txt
 
   linux:
     name: Linux x86_64 - VST3 / Standalone
@@ -225,7 +324,9 @@ jobs:
       - name: DSP tests
         run: ./build/bankmaster_dsp_tests | tee dsp_tests_linux.txt
       - name: Plugin tests
-        run: xvfb-run -a ./build/bankmaster_plugin_tests_artefacts/Release/bankmaster_plugin_tests | tee plugin_tests_linux.txt
+        run: |
+          xvfb-run -a ./build/bankmaster_plugin_tests_artefacts/Release/bankmaster_plugin_tests | tee plugin_tests_linux.txt
+          grep -q " 0 failures" plugin_tests_linux.txt
       - name: pluginval (VST3, strictness 10)
         run: |
           curl -sSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/pluginval_Linux.zip"
@@ -247,7 +348,7 @@ jobs:
             build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3
 
   windows:
-    name: Windows x64 - VST3 (portability check)
+    name: Windows x64 - VST3 / Standalone + installer
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -257,8 +358,29 @@ jobs:
           cmake --build build --config Release -j 4
       - name: DSP tests
         run: .\build\Release\bankmaster_dsp_tests.exe
-      - name: Plugin tests
-        run: .\build\bankmaster_plugin_tests_artefacts\Release\bankmaster_plugin_tests.exe
+      - name: Plugin tests (state, presets, A/B, undo, automation, V2 UI bindings, sizes, snapshots)
+        shell: bash
+        run: |
+          mkdir -p snapshots
+          ./build/bankmaster_plugin_tests_artefacts/Release/bankmaster_plugin_tests.exe --snapshot snapshots | tee plugin_tests_windows.txt
+          grep -q " 0 failures" plugin_tests_windows.txt
+      - name: Identity (vendor "Kalox Audio", unchanged plug-in IDs, exe icon)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $mi = Get-Content build\BankMaster_artefacts\Release\VST3\BANKMASTER.vst3\Contents\Resources\moduleinfo.json -Raw
+          $mi | Select-String '"(Vendor|CID|Version)"' -AllMatches | ForEach-Object { $_.Matches.Value } | Out-Null
+          ($mi -split "`n" | Select-String '"(Name|Vendor|Version|CID)"') | Out-String | Tee-Object -FilePath identity_windows.txt
+          if ($mi -notmatch '"Vendor": "Kalox Audio"') { "vendor is not Kalox Audio"; exit 1 }
+          if ($mi -notmatch 'ABCDEF019182FAEB4B6C6F78426B6D73') { "VST3 class ID changed"; exit 1 }
+          & .\build\bankmaster_hostcheck_artefacts\Release\bankmaster_hostcheck.exe describe build\BankMaster_artefacts\Release\VST3\BANKMASTER.vst3 | Tee-Object -FilePath identity_windows.txt -Append
+          if (-not (Select-String -Path identity_windows.txt -Pattern "manufacturer=Kalox Audio" -Quiet)) { exit 1 }
+          Add-Type -AssemblyName System.Drawing
+          $exe = "build\BankMaster_artefacts\Release\Standalone\BANKMASTER.exe"
+          $ico = [System.Drawing.Icon]::ExtractAssociatedIcon((Resolve-Path $exe))
+          $ico.ToBitmap().Save("$pwd\snapshots\standalone_exe_icon_windows.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          "Standalone exe icon extracted: $($ico.Width)x$($ico.Height)" | Tee-Object -FilePath identity_windows.txt -Append
+          (Get-Item $exe).VersionInfo | Format-List CompanyName,ProductName,ProductVersion,FileDescription | Out-String | Tee-Object -FilePath identity_windows.txt -Append
       - name: pluginval (VST3, strictness 10)
         shell: bash
         run: |
@@ -286,7 +408,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $R = "win_installer_report.txt"
-          $exe = Get-Item "BANKMASTER\dist\BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup.exe"
+          $exe = Get-Item "BANKMASTER\dist\BANKMASTER-BY-KALOX-2.0.0-Windows-x64-Setup.exe"
           $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
           "$hash  $($exe.Name)" | Out-File -Encoding ascii "$($exe.FullName).sha256"
           "Installer: $($exe.Name)  size $($exe.Length) bytes  sha256 $hash" | Tee-Object -FilePath $R
@@ -294,8 +416,8 @@ jobs:
           $exe.VersionInfo | Format-List ProductName,ProductVersion,CompanyName,FileDescription | Out-String | Tee-Object -FilePath $R -Append
 
           $vst = Join-Path $env:CommonProgramFiles "VST3"
-          $app = Join-Path $env:ProgramFiles "KALOX\BANKMASTER"
-          function Snap { @("<snapshot>") + @(Get-ChildItem $vst, (Join-Path $env:ProgramFiles "KALOX") -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object FullName | Sort-Object) }
+          $app = Join-Path $env:ProgramFiles "Kalox Audio\BANKMASTER"
+          function Snap { @("<snapshot>") + @(Get-ChildItem $vst, (Join-Path $env:ProgramFiles "KALOX"), (Join-Path $env:ProgramFiles "Kalox Audio") -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object FullName | Sort-Object) }
           $before = Snap
           "== silent install (components vst3,standalone)" | Tee-Object -FilePath $R -Append
           $p = Start-Process $exe.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=vst3,standalone',"/LOG=$pwd\install.log" -Wait -PassThru
@@ -305,14 +427,15 @@ jobs:
           $added = @(Compare-Object $before $after | Where-Object SideIndicator -eq '=>' | ForEach-Object InputObject)
           "files added:" | Tee-Object -FilePath $R -Append
           $added | Tee-Object -FilePath $R -Append
-          $unexpected = @($added | Where-Object { $_ -notlike "$vst\BANKMASTER.vst3*" -and $_ -notlike "$app*" -and $_ -ne (Join-Path $env:ProgramFiles "KALOX") })
+          $unexpected = @($added | Where-Object { $_ -notlike "$vst\BANKMASTER.vst3*" -and $_ -notlike "$app*" -and $_ -ne (Join-Path $env:ProgramFiles "Kalox Audio") })
           if ($unexpected.Count -gt 0) { "unexpected files: $unexpected"; exit 1 }
           if (-not (Test-Path "$vst\BANKMASTER.vst3\Contents\x86_64-win\BANKMASTER.vst3")) { "VST3 missing"; exit 1 }
           if (-not (Test-Path "$app\BANKMASTER.exe")) { "Standalone missing"; exit 1 }
           if (-not (Test-Path "$app\unins000.exe")) { "uninstaller missing"; exit 1 }
           $key = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{951C821C-D559-4BEF-BC26-6822C33BB554}_is1"
           Get-ItemProperty $key | Format-List DisplayName,DisplayVersion,Publisher,InstallLocation,UninstallString,DisplayIcon | Out-String | Tee-Object -FilePath $R -Append
-          Get-ItemProperty "HKLM:\SOFTWARE\KALOX\BANKMASTER" | Format-List Version,InstallDir,VST3Path | Out-String | Tee-Object -FilePath $R -Append
+          if ((Get-ItemProperty $key).Publisher -ne "Kalox Audio") { "publisher is not Kalox Audio"; exit 1 }
+          Get-ItemProperty "HKLM:\SOFTWARE\Kalox Audio\BANKMASTER" | Format-List Version,InstallDir,VST3Path | Out-String | Tee-Object -FilePath $R -Append
 
           "== Steinberg validator on the INSTALLED VST3" | Tee-Object -FilePath $R -Append
           $val = & .\vst3build\bin\Release\validator.exe "$vst\BANKMASTER.vst3" 2>&1 | Out-String
@@ -329,16 +452,73 @@ jobs:
           if ($diff.Count -gt 0) { "file system differs after uninstall:"; $diff; exit 1 }
           "file system identical to the state before installation" | Tee-Object -FilePath $R -Append
           if (Test-Path $key) { "uninstall registry key still present"; exit 1 }
-          if (Test-Path "HKLM:\SOFTWARE\KALOX\BANKMASTER") { "KALOX\BANKMASTER registry key still present"; exit 1 }
+          if (Test-Path "HKLM:\SOFTWARE\Kalox Audio\BANKMASTER") { "Kalox Audio\BANKMASTER registry key still present"; exit 1 }
           "registry entries removed" | Tee-Object -FilePath $R -Append
+
+      - name: Download the released 1.0.0 Setup.exe (run #8)
+        uses: actions/download-artifact@v4
+        with:
+          name: BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup
+          path: v1setup
+          run-id: ${{ env.V1_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: V1 x V2 audio null test (VST3) and real upgrade 1.0 -> 2.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $R = "upgrade_and_null_test_windows.txt"
+          $HC = ".\build\bankmaster_hostcheck_artefacts\Release\bankmaster_hostcheck.exe"
+          $vst = Join-Path $env:CommonProgramFiles "VST3\BANKMASTER.vst3"
+          $v1 = Get-ChildItem v1setup\*.exe | Select-Object -First 1
+          "1.0 installer: $($v1.Name) sha256 $((Get-FileHash $v1.FullName).Hash.ToLower())" | Tee-Object -FilePath $R
+          $p = Start-Process $v1.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=vst3,standalone' -Wait -PassThru
+          "1.0 setup exit code: $($p.ExitCode)" | Tee-Object -FilePath $R -Append
+          if ($p.ExitCode -ne 0) { exit 1 }
+          if (-not (Test-Path (Join-Path $env:ProgramFiles "KALOX\BANKMASTER\BANKMASTER.exe"))) { "1.0 standalone missing"; exit 1 }
+          & $HC describe $vst | Tee-Object -FilePath v1_vst3_description.txt | Tee-Object -FilePath $R -Append
+          & $HC render $vst nt_v1_vst3_x64 | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+          "== upgrade: 2.0.0 over 1.0.0" | Tee-Object -FilePath $R -Append
+          $v2 = Get-Item "BANKMASTER\dist\BANKMASTER-BY-KALOX-2.0.0-Windows-x64-Setup.exe"
+          $p = Start-Process $v2.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=vst3,standalone',"/LOG=$pwd\upgrade.log" -Wait -PassThru
+          "2.0 setup exit code: $($p.ExitCode)" | Tee-Object -FilePath $R -Append
+          if ($p.ExitCode -ne 0) { exit 1 }
+          $key = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{951C821C-D559-4BEF-BC26-6822C33BB554}_is1"
+          $u = Get-ItemProperty $key
+          $u | Format-List DisplayName,DisplayVersion,Publisher,InstallLocation | Out-String | Tee-Object -FilePath $R -Append
+          if ($u.DisplayVersion -ne "2.0.0" -or $u.Publisher -ne "Kalox Audio") { "uninstall entry not upgraded"; exit 1 }
+          if (Test-Path (Join-Path $env:ProgramFiles "KALOX")) { "1.0 folder Program Files\KALOX still present"; Get-ChildItem -Recurse (Join-Path $env:ProgramFiles "KALOX"); exit 1 }
+          if (Test-Path "HKLM:\SOFTWARE\KALOX\BANKMASTER") { "1.0 registry key still present"; exit 1 }
+          if (-not (Test-Path (Join-Path $env:ProgramFiles "Kalox Audio\BANKMASTER\BANKMASTER.exe"))) { "2.0 standalone missing"; exit 1 }
+          "1.0 folder and registry key removed, 2.0 installed in Program Files\Kalox Audio\BANKMASTER" | Tee-Object -FilePath $R -Append
+          & $HC describe $vst | Tee-Object -FilePath v2_vst3_description.txt | Tee-Object -FilePath $R -Append
+          if (-not (Select-String -Path v2_vst3_description.txt -Pattern "manufacturer=Kalox Audio" -Quiet)) { exit 1 }
+          $id1 = Select-String -Path v1_vst3_description.txt -Pattern '^(name|uniqueId|deprecatedUid|format)=' | ForEach-Object Line
+          $id2 = Select-String -Path v2_vst3_description.txt -Pattern '^(name|uniqueId|deprecatedUid|format)=' | ForEach-Object Line
+          if (Compare-Object $id1 $id2) { "plug-in identity changed"; exit 1 }
+          "VST3 name / uniqueId / deprecatedUid unchanged 1.0 -> 2.0" | Tee-Object -FilePath $R -Append
+          & $HC render $vst nt_v2_vst3_x64 --state-from nt_v1_vst3_x64 | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          "== V1 x V2 null test: VST3 x64" | Tee-Object -FilePath $R -Append
+          & $HC compare nt_v1_vst3_x64 nt_v2_vst3_x64 | Tee-Object -FilePath null_test_vst3_x64.txt | Tee-Object -FilePath $R -Append
+          $nullOk = $LASTEXITCODE
+
+          "== uninstall 2.0.0" | Tee-Object -FilePath $R -Append
+          $u2 = Start-Process (Join-Path $env:ProgramFiles "Kalox Audio\BANKMASTER\unins000.exe") -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          for ($i = 0; $i -lt 60 -and (Test-Path $vst); $i++) { Start-Sleep 1 }
+          if ((Test-Path $vst) -or (Test-Path (Join-Path $env:ProgramFiles "Kalox Audio")) -or (Test-Path $key)) { "not clean after uninstall"; exit 1 }
+          "system clean after uninstall (exit code $($u2.ExitCode))" | Tee-Object -FilePath $R -Append
+          exit $nullOk
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup
+          name: BANKMASTER-BY-KALOX-2.0.0-Windows-x64-Setup
           path: |
-            BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup.exe
-            BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup.exe.sha256
+            BANKMASTER/dist/BANKMASTER-BY-KALOX-2.0.0-Windows-x64-Setup.exe
+            BANKMASTER/dist/BANKMASTER-BY-KALOX-2.0.0-Windows-x64-Setup.exe.sha256
 
       - name: Upload Windows validation logs
         if: always()
@@ -348,6 +528,9 @@ jobs:
           path: |
             *.txt
             install.log
+            upgrade.log
+            snapshots/*.png
+            nt_*/*.txt
 
       - uses: actions/upload-artifact@v4
         with:

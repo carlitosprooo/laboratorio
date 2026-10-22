@@ -1,8 +1,9 @@
-// BANKMASTER by KALOX — factory + user presets
+// BANKMASTER BY KALOX — factory + user presets
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Parameters.h"
+#include <map>
 
 class PresetManager
 {
@@ -25,6 +26,13 @@ public:
     int getCurrentPresetIndex() const;
     void setCurrentPresetName (const juce::String& n);
 
+    /** Plain parameter values (id -> value) that loading the given preset writes; empty if unknown. */
+    std::map<juce::String, float> getPresetValues (const juce::String& name) const;
+    /** True when any parameter differs from the values of the current (last loaded) preset. */
+    bool isModified() const;
+    /** Reloads the current preset (the caller wraps it in an undo transaction). */
+    bool revertToCurrentPreset();
+
     static juce::File getUserPresetDirectory();
     /** Overrides the preset folder (used by the tests). */
     static void setUserPresetDirectoryOverride (const juce::File& dir);
@@ -32,4 +40,6 @@ public:
 private:
     juce::Array<juce::File> getUserPresetFiles() const;
     juce::AudioProcessorValueTreeState& state;
+    mutable juce::String cachedName;
+    mutable std::map<juce::String, float> cachedValues;
 };

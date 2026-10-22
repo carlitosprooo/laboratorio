@@ -6,7 +6,7 @@ if (APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
 endif ()
 set (CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
 
-project (BANKMASTER VERSION 1.0.0 LANGUAGES C CXX)
+project (BANKMASTER VERSION 2.0.0 LANGUAGES C CXX)
 
 set (CMAKE_CXX_STANDARD 17)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -55,14 +55,20 @@ if (APPLE)
     list (APPEND BANKMASTER_FORMATS AU)
 endif ()
 
+# Identity. COMPANY_NAME is only the vendor text shown by hosts ("Kalox Audio").
+# Hosts and saved projects identify the plug-in by the manufacturer / plug-in codes
+# (VST3 class IDs and the AU component are derived from Klox + Bkms) and by the
+# bundle ID: these must never change.
 juce_add_plugin (BankMaster
     PRODUCT_NAME "BANKMASTER"
-    COMPANY_NAME "KALOX"
+    COMPANY_NAME "Kalox Audio"
+    COMPANY_COPYRIGHT "(c) 2026 Kalox Audio"
     COMPANY_WEBSITE "https://kalox.audio"
     BUNDLE_ID "com.kalox.bankmaster"
     PLUGIN_MANUFACTURER_CODE Klox
     PLUGIN_CODE Bkms
-    DESCRIPTION "BANKMASTER by KALOX - 4-in-1 Mastering Suite"
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/Resources/Icon/icon_1024.png"
+    DESCRIPTION "BANKMASTER BY KALOX - 4-in-1 Mastering Suite"
     FORMATS ${BANKMASTER_FORMATS}
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -79,12 +85,25 @@ set (BANKMASTER_PLUGIN_SOURCES
     Source/Plugin/PresetManager.cpp
     Source/Plugin/PluginProcessor.cpp
     Source/Plugin/PluginEditor.cpp
-    Source/Plugin/UI/LookAndFeel.cpp
-    Source/Plugin/UI/EqGraph.cpp
+    Source/Plugin/UI/Controls.cpp
+    Source/Plugin/UI/Displays.cpp
     Source/Plugin/UI/Pages.cpp
-    Source/Plugin/UI/MeterBar.cpp)
+    Source/Plugin/UI/Chrome.cpp)
 
 target_sources (BankMaster PRIVATE ${BANKMASTER_PLUGIN_SOURCES})
+
+# UI fonts (Inter + Montserrat, SIL OFL 1.1) embedded in the binary: identical text on macOS and Windows
+juce_add_binary_data (BankMasterAssets
+    HEADER_NAME BinaryData.h
+    NAMESPACE BinaryData
+    SOURCES
+        Resources/Fonts/Inter-Regular.otf
+        Resources/Fonts/Inter-Medium.otf
+        Resources/Fonts/Inter-SemiBold.otf
+        Resources/Fonts/Inter-Bold.otf
+        Resources/Fonts/Montserrat-ExtraBold.ttf
+        Resources/Fonts/Montserrat-SemiBold.ttf)
+set_target_properties (BankMasterAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set (BANKMASTER_JUCE_DEFS
     JUCE_WEB_BROWSER=0
@@ -103,7 +122,7 @@ set (BANKMASTER_JUCE_MODULES
     juce::juce_gui_extra)
 
 target_link_libraries (BankMaster
-    PRIVATE bankmaster_dsp ${BANKMASTER_JUCE_MODULES}
+    PRIVATE bankmaster_dsp BankMasterAssets ${BANKMASTER_JUCE_MODULES}
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags)
 if (NOT MSVC)
     target_compile_options (BankMaster PRIVATE -Wall -Wextra)
@@ -117,7 +136,7 @@ if (BANKMASTER_BUILD_TESTS)
     target_sources (bankmaster_plugin_tests PRIVATE Tests/PluginTests.cpp ${BANKMASTER_PLUGIN_SOURCES})
     target_compile_definitions (bankmaster_plugin_tests PRIVATE ${BANKMASTER_JUCE_DEFS}
         JucePlugin_VersionString="${PROJECT_VERSION}" JucePlugin_Name="BANKMASTER" JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1)
-    target_link_libraries (bankmaster_plugin_tests PRIVATE bankmaster_dsp ${BANKMASTER_JUCE_MODULES}
+    target_link_libraries (bankmaster_plugin_tests PRIVATE bankmaster_dsp BankMasterAssets ${BANKMASTER_JUCE_MODULES}
         juce::juce_recommended_config_flags)
     add_test (NAME plugin_tests COMMAND bankmaster_plugin_tests)
 endif ()
@@ -127,3 +146,10 @@ target_sources (bankmaster_render PRIVATE Tools/Render.cpp)
 target_compile_definitions (bankmaster_render PRIVATE ${BANKMASTER_JUCE_DEFS})
 target_link_libraries (bankmaster_render PRIVATE bankmaster_dsp juce::juce_audio_formats juce::juce_audio_basics
     juce::juce_recommended_config_flags)
+
+# Host-side check of a built plug-in: identity, parameters, state and audio (V1 x V2 null test)
+juce_add_console_app (bankmaster_hostcheck PRODUCT_NAME "bankmaster_hostcheck")
+target_sources (bankmaster_hostcheck PRIVATE Tools/HostCheck.cpp)
+target_compile_definitions (bankmaster_hostcheck PRIVATE ${BANKMASTER_JUCE_DEFS} JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=1
+    JUCE_PLUGINHOST_LADSPA=0 JUCE_PLUGINHOST_LV2=0 JUCE_PLUGINHOST_VST=0 JUCE_MODAL_LOOPS_PERMITTED=1)
+target_link_libraries (bankmaster_hostcheck PRIVATE juce::juce_audio_utils juce::juce_audio_processors juce::juce_recommended_config_flags)

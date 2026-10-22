@@ -1,0 +1,100 @@
+BANKMASTER DSP tests (x86_64, release)
+[ RUN  ] svf_sections_match_analytic_response
+    | worst |measured - analytic| over 11 types x 3 fc x 5 f = 0.0000 dB
+[  OK  ] svf_sections_match_analytic_response (0.30 s)
+[ RUN  ] eq_kalox_frequency_response
+    | preset curve: 25 Hz -3.02 | 50 Hz -0.06 | 250 Hz -1.00 | 1 kHz -0.07 | 10 kHz 0.50 | 16 kHz 0.96 dB
+    | processed EQ vs analytic curve, worst deviation = 0.0000 dB
+[  OK  ] eq_kalox_frequency_response (0.04 s)
+[ RUN  ] eq_stability_under_extreme_modulation
+    | 10 s white noise, all bands randomised every 64 samples (5 x +-24 dB, Q 0.025..40): max |y| = 602.1, finite = 1, residual after 2 s silence = 9.81e-45
+    | impulse responses decaying: 63 / 63 (types x Q {0.025, 1, 40} x f {10, 1k, 23.9k}, 48 dB/oct, +24 dB)
+[  OK  ] eq_stability_under_extreme_modulation (21.70 s)
+[ RUN  ] eq_dynamic_band_reacts_to_level
+    | dynamic band (range -1 dB, thr -30 dB): gain @-60 dBFS = 0.000 dB, @-6 dBFS = -0.980 dB
+[  OK  ] eq_dynamic_band_reacts_to_level (0.01 s)
+[ RUN  ] oversampler_flat_passband_integer_latency_and_image_rejection
+    | oversampling  2x (high quality): latency 79 samples
+    | oversampling  4x (high quality): latency 87 samples
+    | oversampling  8x (high quality): latency 90 samples
+    | oversampling 16x (high quality): latency 91 samples
+    | 2x upsampling image rejection (18 kHz @44.1k): -118.5 dB
+[  OK  ] oversampler_flat_passband_integer_latency_and_image_rejection (0.29 s)
+[ RUN  ] compressor_static_curve_matches_design
+    | in  -40.0 dBFS -> GR measured -0.00 dB, design  0.00 dB
+    | in  -30.0 dBFS -> GR measured  0.00 dB, design  0.00 dB
+    | in  -24.0 dBFS -> GR measured  0.20 dB, design  0.20 dB
+    | in  -18.0 dBFS -> GR measured  1.24 dB, design  1.25 dB
+    | in  -12.0 dBFS -> GR measured  3.18 dB, design  3.20 dB
+    | in   -6.0 dBFS -> GR measured  5.98 dB, design  6.00 dB
+    | in    0.0 dBFS -> GR measured  8.98 dB, design  9.00 dB
+[  OK  ] compressor_static_curve_matches_design (0.08 s)
+[ RUN  ] compressor_attack_release_timing
+    | final GR 9.00 dB, attack(63%) = 30.0 ms (set 30), release(63%) = 100.8 ms (set 100)
+[  OK  ] compressor_attack_release_timing (0.01 s)
+[ RUN  ] saturation_harmonics_and_aliasing
+    | Clean Tube 20% drive, 1 kHz @ -6 dBFS: THD = -31.9 dB
+    | Clean Tube 0% drive: THD = -39.1 dB
+    | aliasing (soft clip 90%, 9 kHz @44.1k, worst non-harmonic): 1x -12.9 dB | 4x -48.1 dB | 16x -80.2 dB
+    | KALOX preset saturation (Clean Tube 20%, 4x), 9 kHz @ -6 dBFS: worst alias -97.5 dB
+[  OK  ] saturation_harmonics_and_aliasing (0.33 s)
+[ RUN  ] truepeak_meter_accuracy
+    | fs/4 sine @-6.0 dB: sample peak -9.01 dBFS, true peak meter -5.91 dBTP
+    | fs/4 sine @0.0 dB: sample peak -3.01 dBFS, true peak meter 0.09 dBTP
+    | 997 Hz sine @ -6.02 dBFS: true peak meter -6.020 dBTP
+    | 9973 Hz sine @ -6.02 dBFS: true peak meter -6.020 dBTP
+    | 19000 Hz sine @ -6.02 dBFS: true peak meter -6.021 dBTP
+[  OK  ] truepeak_meter_accuracy (0.06 s)
+[ RUN  ] limiter_respects_true_peak_ceiling
+    | OS 16x TP on  LA 1.00 ms style 0 gain +11 dB -> sample peak -0.138 dBFS, ideal true peak -0.095 dBTP, latency 270, safety clamps 0
+    | OS 16x TP on  LA 0.00 ms style 1 gain +18 dB -> sample peak -0.126 dBFS, ideal true peak -0.107 dBTP, latency 222, safety clamps 0
+    | OS  4x TP on  LA 5.00 ms style 2 gain +14 dB -> sample peak -0.133 dBFS, ideal true peak -0.096 dBTP, latency 458, safety clamps 0
+    | OS  1x TP on  LA 1.00 ms style 3 gain +11 dB -> sample peak -0.138 dBFS, ideal true peak -0.095 dBTP, latency 211, safety clamps 0
+    | OS  1x TP off LA 1.00 ms style 0 gain +11 dB -> sample peak -0.144 dBFS, ideal true peak 1.450 dBTP, latency 100, safety clamps 0
+    | OS  8x TP off LA 2.00 ms style 0 gain +20 dB -> sample peak -0.100 dBFS, ideal true peak -0.031 dBTP, latency 238, safety clamps 0
+[  OK  ] limiter_respects_true_peak_ceiling (4.29 s)
+[ RUN  ] limiter_true_peak_stress_near_nyquist
+    | stress (energy up to Nyquist) OS 16x: ideal true peak -0.118 dBTP (ceiling -0.1)
+    | stress (energy up to Nyquist) OS  1x: ideal true peak -0.117 dBTP (ceiling -0.1)
+[  OK  ] limiter_true_peak_stress_near_nyquist (1.41 s)
+[ RUN  ] limiter_transparent_below_ceiling
+    | limiter latency 270 samples (5.62 ms) at 16x; max deviation on -12 dBFS sine = 1.94e-07
+[  OK  ] limiter_transparent_below_ceiling (0.07 s)
+[ RUN  ] loudness_kweighting_and_ebu_cases
+    | 1 kHz @-23 dBFS: M -22.99 S -22.99 I -22.99 LUFS
+    | gating case (-36/-23/-36 dBFS): I -23.01 LUFS
+[  OK  ] loudness_kweighting_and_ebu_cases (0.32 s)
+[ RUN  ] chain_latency_reported_matches_measured
+    | reported latency 597 samples (sat 87 + comp 240 + lim 270), measured impulse delay 597
+    | KALOX preset latency 357 samples (7.44 ms @48k); master-bypass null residual 0.00e+00
+[  OK  ] chain_latency_reported_matches_measured (0.80 s)
+[ RUN  ] automation_random_parameters_stays_finite_and_under_ceiling
+    | 8 s, every parameter randomised every 128 samples: finite = 1, sample peak -0.126 dBFS
+[  OK  ] automation_random_parameters_stays_finite_and_under_ceiling (1.37 s)
+[ RUN  ] bypass_toggles_are_click_free
+    | master bypass              on/off: max |2nd diff| 1.74e-04 vs steady 1.73e-04 (x1.00)
+    | EQ bypass                  on/off: max |2nd diff| 1.82e-04 vs steady 1.73e-04 (x1.05)
+    | SAT bypass                 on/off: max |2nd diff| 1.91e-04 vs steady 1.73e-04 (x1.10)
+    | COMP bypass                on/off: max |2nd diff| 1.73e-04 vs steady 1.73e-04 (x1.00)
+    | LIM bypass                 on/off: max |2nd diff| 1.74e-04 vs steady 1.73e-04 (x1.00)
+    | SAT oversampling 4x->1x    on/off: max |2nd diff| 2.09e-04 vs steady 1.73e-04 (x1.21)
+    | LIM oversampling 16x->4x   on/off: max |2nd diff| 2.09e-04 vs steady 1.73e-04 (x1.21)
+    | LIM look-ahead 1->3 ms     on/off: max |2nd diff| 2.09e-04 vs steady 1.73e-04 (x1.21)
+    | COMP look-ahead 0->5 ms    on/off: max |2nd diff| 2.09e-04 vs steady 1.73e-04 (x1.21)
+[  OK  ] bypass_toggles_are_click_free (4.11 s)
+[ RUN  ] nan_inf_and_extreme_inputs
+[  OK  ] nan_inf_and_extreme_inputs (0.38 s)
+[ RUN  ] one_master_is_monotonic_and_safe
+    | ONE MASTER   0%: integrated -26.88 LUFS, true peak -12.75 dBTP, limiter drive 0.00 dB
+    | ONE MASTER  50%: integrated -18.77 LUFS, true peak -4.64 dBTP, limiter drive 5.50 dB
+    | ONE MASTER 100%: integrated -12.12 LUFS, true peak -0.12 dBTP, limiter drive 11.00 dB
+    | ONE MASTER 150%: integrated -9.03 LUFS, true peak -0.12 dBTP, limiter drive 13.75 dB
+    | ONE MASTER 200%: integrated -6.75 LUFS, true peak -0.11 dBTP, limiter drive 16.50 dB
+[  OK  ] one_master_is_monotonic_and_safe (8.33 s)
+[ RUN  ] kalox_preset_processes_real_audio_and_cpu_budget
+    | fs 44100: 20 s of audio in 2.482 s -> 12.41% of one core (realtime x8) | in RMS -28.6 dBFS -> out -13.95 LUFS-I, -0.12 dBTP, limiter GR 0.0 dB, comp GR 0.0 dB, lim OS 16x
+    | fs 48000: 20 s of audio in 2.868 s -> 14.34% of one core (realtime x7) | in RMS -28.6 dBFS -> out -14.00 LUFS-I, -0.13 dBTP, limiter GR 0.0 dB, comp GR 0.1 dB, lim OS 16x
+    | fs 96000: 20 s of audio in 4.582 s -> 22.91% of one core (realtime x4) | in RMS -28.7 dBFS -> out -14.16 LUFS-I, -0.97 dBTP, limiter GR -0.0 dB, comp GR 0.1 dB, lim OS 8x
+[  OK  ] kalox_preset_processes_real_audio_and_cpu_budget (21.08 s)
+
+19 tests, 133 checks, 0 failures

@@ -1,4 +1,4 @@
-# BANKMASTER by KALOX — 4-IN-1 MASTERING SUITE
+# BANKMASTER BY KALOX — 4-IN-1 MASTERING SUITE
 
 Plugin de masterização com quatro processadores em uma única instância:
 
@@ -9,18 +9,18 @@ Arquitetura portátil (Windows x64 VST3 e Linux VST3 já compilam e passam nos t
 Todo o DSP é implementação própria (sem código, interface ou algoritmo de terceiros), funciona offline
 e não depende de plugins FabFilter instalados.
 
-![EQ](docs/screenshots/bankmaster_eq.png)
+![EQ](docs/screenshots/v2/v2_eq_1200x780_2x.png)
 
 | Saturação | Compressor | Limiter |
 |---|---|---|
-| ![](docs/screenshots/bankmaster_saturation.png) | ![](docs/screenshots/bankmaster_compressor.png) | ![](docs/screenshots/bankmaster_limiter.png) |
+| ![](docs/screenshots/v2/v2_saturation_1200x780_1x.png) | ![](docs/screenshots/v2/v2_compressor_1200x780_1x.png) | ![](docs/screenshots/v2/v2_limiter_1200x780_1x.png) |
 
 ## Instaladores
 
 | Plataforma | Arquivo | Conteúdo |
 |---|---|---|
-| macOS Universal (arm64 + x86_64) | `BANKMASTER-by-KALOX-1.0.0-macOS-Universal.dmg` | instalador guiado (.pkg) VST3 / AU / Standalone, Read Me, desinstalador |
-| Windows 10/11 x64 | `BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup.exe` | assistente gráfico: VST3 / Standalone, desinstalador |
+| macOS Universal (arm64 + x86_64) | `BANKMASTER-BY-KALOX-1.0.0-macOS-Universal.dmg` | instalador guiado (.pkg) VST3 / AU / Standalone, Read Me, desinstalador |
+| Windows 10/11 x64 | `BANKMASTER-BY-KALOX-1.0.0-Windows-x64-Setup.exe` | assistente gráfico: VST3 / Standalone, desinstalador |
 
 Gerados e testados (instalação + desinstalação reais) pelo GitHub Actions. Ainda **sem assinatura digital**
 — detalhes em `docs/INSTALLERS.md`.
@@ -59,7 +59,7 @@ macOS (Xcode CLT + CMake ≥ 3.22):
 
 ```bash
 scripts/build_macos.sh              # universal arm64+x86_64, testes (nativo + Rosetta), auval, pluginval
-installer/macos/build_pkg.sh        # dist/BANKMASTER-by-KALOX-1.0.0-macOS-universal.pkg
+installer/macos/build_pkg.sh        # dist/BANKMASTER-BY-KALOX-1.0.0-macOS-universal.pkg
 ```
 
 Nada é instalado automaticamente (`COPY_PLUGIN_AFTER_BUILD FALSE`); o instalador só grava

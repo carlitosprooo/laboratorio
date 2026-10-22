@@ -1,5 +1,5 @@
 #!/bin/bash
-# BANKMASTER by KALOX — uninstaller (macOS)
+# BANKMASTER BY KALOX — uninstaller (macOS)
 # Removes ONLY the files installed by "Install BANKMASTER.pkg" and their installer receipts.
 # Other plug-ins (KaloxStart, KaloxSooth, ...) and your user presets are never touched.
 # User presets live in ~/Library/Application Support/KALOX/BANKMASTER/Presets (kept).
@@ -15,7 +15,7 @@ TARGETS=(
 )
 RECEIPTS=(com.kalox.bankmaster.vst3 com.kalox.bankmaster.au com.kalox.bankmaster.app)
 
-echo "BANKMASTER by KALOX - uninstaller"
+echo "BANKMASTER BY KALOX - uninstaller"
 echo
 found=0
 for t in "${TARGETS[@]}"; do

@@ -1,4 +1,4 @@
-// BANKMASTER by KALOX — parameter layout and ChainParams <-> APVTS mapping
+// BANKMASTER BY KALOX — parameter layout and ChainParams <-> APVTS mapping
 #include "Parameters.h"
 
 namespace bmp
@@ -26,7 +26,14 @@ namespace
         return r;
     }
 
-    juce::String dbText (float v, int) { return juce::String (v, std::abs (v) < 10 ? 2 : 1) + " dB"; }
+    /** Formats with dec decimals and never shows a negative zero ("-0.00"). Display only. */
+    juce::String num (float v, int dec)
+    {
+        auto s = juce::String (v, dec);
+        if (s.startsWithChar ('-') && s.substring (1).removeCharacters ("0.").isEmpty()) s = s.substring (1);
+        return s;
+    }
+    juce::String dbText (float v, int) { return num (v, std::abs (v) < 10 ? 2 : 1) + " dB"; }
     juce::String pctText (float v, int) { return juce::String (v, 1) + " %"; }
     juce::String msText (float v, int) { return v < 10 ? juce::String (v, 2) + " ms" : v < 1000 ? juce::String (v, 1) + " ms" : juce::String (v / 1000.0f, 2) + " s"; }
     juce::String hzText (float v, int) { return v < 1000 ? juce::String (v, v < 100 ? 2 : 1) + " Hz" : juce::String (v / 1000.0f, 2) + " kHz"; }
@@ -87,8 +94,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     B.c (id::satStyle, "Sat Style", satStyleNames(), (int) d.sat.style);
     B.f (id::satDrive, "Sat Drive", Range (0, 100, 0.1f), d.sat.drivePct, pctText);
     B.f (id::satMix, "Sat Mix", Range (0, 100, 0.1f), d.sat.mixPct, pctText);
-    B.f (id::satTone, "Sat Tone", Range (-100, 100, 0.1f), d.sat.tone, [] (float v, int) { return juce::String (v, 1); });
-    B.f (id::satDyn, "Sat Dynamics", Range (-100, 100, 0.1f), d.sat.dynamics, [] (float v, int) { return juce::String (v, 1); });
+    B.f (id::satTone, "Sat Tone", Range (-100, 100, 0.1f), d.sat.tone, [] (float v, int) { return num (v, 1); });
+    B.f (id::satDyn, "Sat Dynamics", Range (-100, 100, 0.1f), d.sat.dynamics, [] (float v, int) { return num (v, 1); });
     B.f (id::satFb, "Sat Feedback", Range (0, 100, 0.1f), d.sat.feedbackPct, pctText);
     B.f (id::satFbFreq, "Sat Feedback Freq", logRange (20, 20000, 1000), d.sat.feedbackFreq, hzText);
     B.f (id::satOut, "Sat Output", Range (-24, 24, 0.01f), d.sat.outputDb, dbText);
@@ -114,7 +121,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
 
     B.c (id::limStyle, "Lim Style", limStyleNames(), (int) d.lim.style);
     B.f (id::limGain, "Lim Gain", Range (-12, 30, 0.01f), d.lim.inputGainDb, dbText);
-    B.f (id::limCeil, "Lim Ceiling", Range (-12, 0, 0.01f), d.lim.ceilingDb, [] (float v, int) { return juce::String (v, 2) + " dB"; });
+    B.f (id::limCeil, "Lim Ceiling", Range (-12, 0, 0.01f), d.lim.ceilingDb, [] (float v, int) { return num (v, 2) + " dB"; });
     B.f (id::limAtt, "Lim Attack", logRange (0.1f, 1000, 50), d.lim.attackMs, msText);
     B.f (id::limRel, "Lim Release", logRange (1, 10000, 300), d.lim.releaseMs, msText);
     B.f (id::limLa, "Lim Lookahead", Range (0, 5, 0.001f), d.lim.lookaheadMs, [] (float v, int) { return juce::String (v, 3) + " ms"; });
@@ -208,17 +215,8 @@ void replaceStateAndSync (juce::AudioProcessorValueTreeState& s, const juce::Val
     }
 }
 
-void writeChainToState (juce::AudioProcessorValueTreeState& s, const bm::ChainParams& p)
+void forEachChainValue (const bm::ChainParams& p, const std::function<void (const juce::String&, float)>& set)
 {
-    auto set = [&] (const juce::String& pid, float value)
-    {
-        if (auto* prm = s.getParameter (pid))
-        {
-            prm->beginChangeGesture();
-            prm->setValueNotifyingHost (prm->convertTo0to1 (value));
-            prm->endChangeGesture();
-        }
-    };
     auto setB = [&] (const juce::String& pid, bool b) { set (pid, b ? 1.0f : 0.0f); };
 
     set (id::inGain, p.inputGainDb); set (id::outGain, p.outputGainDb);
@@ -247,6 +245,19 @@ void writeChainToState (juce::AudioProcessorValueTreeState& s, const bm::ChainPa
     set (id::limAtt, p.lim.attackMs); set (id::limRel, p.lim.releaseMs); set (id::limLa, p.lim.lookaheadMs);
     setB (id::limTp, p.lim.truePeak); set (id::limOs, (float) p.lim.osFactorLog2); set (id::limLinkT, p.lim.linkTransientsPct);
     set (id::limLinkR, p.lim.linkReleasePct); set (id::limDither, (float) p.lim.dither);
+}
+
+void writeChainToState (juce::AudioProcessorValueTreeState& s, const bm::ChainParams& p)
+{
+    forEachChainValue (p, [&] (const juce::String& pid, float value)
+    {
+        if (auto* prm = s.getParameter (pid))
+        {
+            prm->beginChangeGesture();
+            prm->setValueNotifyingHost (prm->convertTo0to1 (value));
+            prm->endChangeGesture();
+        }
+    });
 }
 
 } // namespace bmp

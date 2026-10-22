@@ -1,4 +1,4 @@
-// BANKMASTER by KALOX — offline render + objective comparison tool
+// BANKMASTER BY KALOX — offline render + objective comparison tool
 //
 //   bankmaster_render --list-presets
 //   bankmaster_render --in mix.wav --out master.wav [--preset "KALOX MASTER - ORIGINAL"] [--one 120]

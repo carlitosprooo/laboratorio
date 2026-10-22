@@ -1,4 +1,4 @@
-// BANKMASTER by KALOX — factory + user presets
+// BANKMASTER BY KALOX — factory + user presets
 #include "PresetManager.h"
 
 namespace
@@ -97,5 +97,43 @@ int PresetManager::getCurrentPresetIndex() const
 
 void PresetManager::setCurrentPresetName (const juce::String& n)
 {
+    cachedName.clear();   // the preset's values may have changed (saved again under the same name)
     state.state.setProperty (kPresetNameProperty, n, nullptr);
+}
+
+std::map<juce::String, float> PresetManager::getPresetValues (const juce::String& name) const
+{
+    std::map<juce::String, float> values;
+    const auto& factory = bm::getFactoryPresets();
+    for (const auto& f : factory)
+        if (juce::String (f.name) == name)
+        {
+            bmp::forEachChainValue (f.params, [&] (const juce::String& pid, float v) { values[pid] = v; });
+            values[bmp::id::bypass] = 0.0f;   // loadPreset() also clears the master bypass
+            return values;
+        }
+    const auto file = getUserPresetDirectory().getChildFile (name + kExtension);
+    if (auto xml = juce::XmlDocument::parse (file))
+        if (xml->hasTagName (state.state.getType()))
+            for (auto* child : xml->getChildIterator())
+                if (child->hasAttribute ("id") && child->hasAttribute ("value"))
+                    values[child->getStringAttribute ("id")] = (float) child->getDoubleAttribute ("value");
+    return values;
+}
+
+bool PresetManager::isModified() const
+{
+    const auto name = getCurrentPresetName();
+    if (name != cachedName) { cachedValues = getPresetValues (name); cachedName = name; }
+    for (const auto& [pid, value] : cachedValues)
+        if (auto* prm = state.getParameter (pid))
+            if (std::abs (prm->getValue() - prm->convertTo0to1 (value)) > 1.0e-4f)
+                return true;
+    return false;
+}
+
+bool PresetManager::revertToCurrentPreset()
+{
+    cachedName.clear();
+    return loadPresetByName (getCurrentPresetName());
 }

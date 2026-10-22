@@ -1,4 +1,4 @@
-// BANKMASTER by KALOX — audio processor (single instance, full chain)
+// BANKMASTER BY KALOX — audio processor (single instance, full chain)
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -108,6 +108,7 @@ void BankMasterProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto tree = state.copyState();
     tree.setProperty ("version", JucePlugin_VersionString, nullptr);
+    if (uiState.getNumProperties() > 0) tree.appendChild (uiState.createCopy(), nullptr);
     if (auto xml = tree.createXml()) copyXmlToBinary (*xml, destData);
 }
 
@@ -115,7 +116,16 @@ void BankMasterProcessor::setStateInformation (const void* data, int sizeInBytes
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (state.state.getType()))
-            bmp::replaceStateAndSync (state, juce::ValueTree::fromXml (*xml));
+        {
+            auto tree = juce::ValueTree::fromXml (*xml);
+            const auto ui = tree.getChildWithName (uiState.getType());
+            if (ui.isValid())
+            {
+                uiState.copyPropertiesFrom (ui, nullptr);
+                tree.removeChild (ui, nullptr);
+            }
+            bmp::replaceStateAndSync (state, tree);
+        }
 }
 
 // ---------------------------------------------------------------------------- INPUT LEARN

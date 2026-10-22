@@ -1,0 +1,60 @@
+[ RUN  ] defaults_are_kalox_master_original
+[  OK  ] defaults_are_kalox_master_original
+[ RUN  ] processes_real_audio_reports_latency
+    | 6 s through the full chain: finite 1, sample peak -1.662 dBFS, integrated -12.36 LUFS, latency 357 samples
+    | after lookahead 1.004 -> 3 ms: host latency 453, chain latency 453
+[  OK  ] processes_real_audio_reports_latency
+[ RUN  ] input_learn_sets_reference_level
+    | measured -30.99 LUFS -> INPUT gain set to +10.99 dB (target -20 LUFS)
+[  OK  ] input_learn_sets_reference_level
+[ RUN  ] bus_layouts
+[  OK  ] bus_layouts
+[ RUN  ] state_save_and_restore_roundtrip
+    | 97 parameters, 0 mismatches after restore, state size 3661 bytes
+[  OK  ] state_save_and_restore_roundtrip
+[ RUN  ] factory_presets_load_exact_values
+    | KALOX MASTER - ORIGINAL    -> exact
+    | AFRO HOUSE MASTER          -> exact
+    | DEEP HOUSE MASTER          -> exact
+    | TECH HOUSE MASTER          -> exact
+    | CLUB MASTER                -> exact
+    | TRANSPARENT MASTER         -> exact
+    | CUSTOM USER PRESET         -> exact
+[  OK  ] factory_presets_load_exact_values
+[ RUN  ] user_preset_save_load_delete
+[  OK  ] user_preset_save_load_delete
+[ RUN  ] ab_compare_and_undo_redo
+[  OK  ] ab_compare_and_undo_redo
+[ RUN  ] automation_from_another_thread_while_processing
+[  OK  ] automation_from_another_thread_while_processing
+[ RUN  ] v2_editor_sizes_and_proportional_layout
+    | 1080 x 700 -> scale 0.897, content 1076.9 x 700.0 at (1.5, 0.0)
+    | 1200 x 780 -> scale 1.000, content 1200.0 x 780.0 at (0.0, 0.0)
+    | 1600 x 1040 -> scale 1.333, content 1600.0 x 1040.0 at (0.0, 0.0)
+    | 2000 x 1300 -> scale 1.667, content 2000.0 x 1300.0 at (0.0, 0.0)
+    | 1500 x 760 -> scale 0.974, content 1169.2 x 760.0 at (165.4, 0.0)
+    | 1100 x 1000 -> scale 0.917, content 1100.0 x 715.0 at (0.0, 142.5)
+[  OK  ] v2_editor_sizes_and_proportional_layout
+[ RUN  ] v2_every_parameter_bound_to_a_control_both_ways
+    | 97 parameters, 97 covered by controls, 0 binding failures
+[  OK  ] v2_every_parameter_bound_to_a_control_both_ways
+[ RUN  ] v2_undo_redo_buttons_and_revert_with_confirmation
+[  OK  ] v2_undo_redo_buttons_and_revert_with_confirmation
+[ RUN  ] v2_ab_presets_navigation_and_ui_state
+[  OK  ] v2_ab_presets_navigation_and_ui_state
+[ RUN  ] v2_snapshots_all_pages_sizes_and_scales
+    | snapshot v2_eq_1200x780_1x.png
+    | snapshot v2_eq_1200x780_2x.png
+    | snapshot v2_eq_1200x780_125pct.png
+    | snapshot v2_eq_1200x780_150pct.png
+    | snapshot v2_eq_1080x700_1x.png
+    | snapshot v2_eq_2000x1300_1x.png
+    | snapshot v2_saturation_1200x780_1x.png
+    | snapshot v2_saturation_1200x780_2x.png
+    | snapshot v2_compressor_1200x780_1x.png
+    | snapshot v2_compressor_1200x780_2x.png
+    | snapshot v2_limiter_1200x780_1x.png
+    | snapshot v2_limiter_1200x780_2x.png
+[  OK  ] v2_snapshots_all_pages_sizes_and_scales
+
+165 checks, 0 failures

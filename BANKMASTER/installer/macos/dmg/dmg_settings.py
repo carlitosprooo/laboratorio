@@ -1,7 +1,7 @@
-# BANKMASTER by KALOX — dmgbuild settings (https://dmgbuild.readthedocs.io)
+# BANKMASTER BY KALOX — dmgbuild settings (https://dmgbuild.readthedocs.io)
 # Usage (see build_dmg.sh):
 #   dmgbuild -s dmg_settings.py -D pkg=... -D readme=... -D uninstall=... \
-#            -D background=... -D icon=... "BANKMASTER by KALOX" out.dmg
+#            -D background=... -D icon=... "BANKMASTER BY KALOX" out.dmg
 # dmgbuild writes the Finder layout (.DS_Store) directly, so no Finder / GUI session is needed.
 import os.path
 

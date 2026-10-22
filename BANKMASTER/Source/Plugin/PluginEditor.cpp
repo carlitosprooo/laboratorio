@@ -1,91 +1,128 @@
-// BANKMASTER by KALOX — main editor
+// BANKMASTER — BY KALOX · V2 editor
 #include "PluginEditor.h"
 
-namespace
-{
-    const char* kTabNames[] = { "EQ", "SATURATION", "COMPRESSOR", "LIMITER" };
-}
+using namespace bmui;
 
 BankMasterEditor::BankMasterEditor (BankMasterProcessor& p)
-    : AudioProcessorEditor (p), proc (p),
-      oneMaster (p.getState(), bmp::id::oneAmt, "One Master", theme::iceDeep),
-      oneOn (p.getState(), bmp::id::oneOn, "ON"),
-      meters (p)
+    : AudioProcessorEditor (p), proc (p), header (p), nav (p), globalBar (p)
 {
     setLookAndFeel (&lnf);
+    tooltips.setLookAndFeel (&lnf);
+    setOpaque (true);
 
-    addAndMakeVisible (presetBox);
-    presetBox.setTextWhenNothingSelected ("Preset");
-    presetBox.onChange = [this]
-    {
-        const int idx = presetBox.getSelectedItemIndex();
-        if (idx >= 0 && presetBox.getText() != proc.getPresets().getCurrentPresetName())
-        {
-            proc.beginUndoTransaction ("Load preset");
-            proc.getPresets().loadPreset (idx);
-        }
-    };
-    for (auto* b : { &prevPreset, &nextPreset, &savePreset, &abA, &abB, &abCopy, &undo, &redo })
-        addAndMakeVisible (b);
-    prevPreset.onClick = [this] {
-        const int n = proc.getPresets().getAllPresetNames().size();
-        const int i = proc.getPresets().getCurrentPresetIndex();
-        proc.beginUndoTransaction ("Load preset");
-        proc.getPresets().loadPreset ((i - 1 + n) % n);
-    };
-    nextPreset.onClick = [this] {
-        const int n = proc.getPresets().getAllPresetNames().size();
-        const int i = proc.getPresets().getCurrentPresetIndex();
-        proc.beginUndoTransaction ("Load preset");
-        proc.getPresets().loadPreset ((i + 1) % n);
-    };
-    savePreset.onClick = [this] { savePresetDialog(); };
+    addAndMakeVisible (content);
+    content.setSize (kDesignWidth, kDesignHeight);
+    content.addAndMakeVisible (header);
+    content.addAndMakeVisible (nav);
+    content.addAndMakeVisible (globalBar);
 
-    abA.setClickingTogglesState (false);
-    abB.setClickingTogglesState (false);
-    abA.onClick = [this] { proc.selectAbSlot (0); };
-    abB.onClick = [this] { proc.selectAbSlot (1); };
-    abCopy.setTooltip ("Copy the current slot to the other one");
-    abCopy.onClick = [this] { proc.copyAbToOther(); };
-    undo.onClick = [this] { proc.undo(); };
-    redo.onClick = [this] { proc.redo(); };
-
-    addAndMakeVisible (oneMaster);
-    addAndMakeVisible (oneOn);
-
-    const juce::String powerIds[] = { bmp::id::eqOn, bmp::id::satOn, bmp::id::compOn, bmp::id::limOn };
-    for (int i = 0; i < 4; ++i)
-    {
-        tabs[i].setButtonText (kTabNames[i]);
-        tabs[i].setRadioGroupId (1001);
-        tabs[i].setClickingTogglesState (true);
-        tabs[i].onClick = [this, i] { showTab (i); };
-        addAndMakeVisible (tabs[i]);
-        power[i] = std::make_unique<Toggle> (proc.getState(), powerIds[i], juce::CharPointer_UTF8 ("\xe2\x8f\xbb"), theme::ok.darker (0.2f));
-        power[i]->setTooltip (juce::String ("Enable / bypass ") + kTabNames[i]);
-        addAndMakeVisible (*power[i]);
-    }
-
-    pages[0] = std::make_unique<EqPage> (proc);
+    auto eq = std::make_unique<EqPage> (proc);
+    eqPage = eq.get();
+    pages[0] = std::move (eq);
     pages[1] = std::make_unique<SatPage> (proc);
     pages[2] = std::make_unique<CompPage> (proc);
     pages[3] = std::make_unique<LimPage> (proc);
-    for (auto& pg : pages) addChildComponent (*pg);
+    for (auto& pg : pages) content.addChildComponent (*pg);
 
-    addAndMakeVisible (meters);
-    addMouseListener (this, true); // begin undo transactions on every click
+    content.addChildComponent (shield);
+    content.addChildComponent (revertPopover);
+    content.addChildComponent (savePopover);
+    shield.onClickOutside = [this] { cancelPopover(); };
+    revertPopover.onCancel = [this] { cancelPopover(); };
+    revertPopover.cancel.onClick = [this] { cancelPopover(); };
+    revertPopover.confirm.onClick = [this] { confirmRevert(); };
+    savePopover.onCancel = [this] { cancelPopover(); };
+    savePopover.cancel.onClick = [this] { cancelPopover(); };
+    savePopover.confirm.onClick = [this] { commitSave(); };
+    savePopover.nameEditor.onReturnKey = [this] { commitSave(); };
+    savePopover.nameEditor.onEscapeKey = [this] { cancelPopover(); };
 
-    setSize (kWidth, kHeight);
-    refreshPresetBox();
-    showTab (0);
-    startTimerHz (30);
+    // header actions
+    header.prev.onClick = [this]
+    {
+        const int n = proc.getPresets().getAllPresetNames().size();
+        loadPresetIndex ((proc.getPresets().getCurrentPresetIndex() - 1 + n) % n);
+    };
+    header.next.onClick = [this]
+    {
+        const int n = proc.getPresets().getAllPresetNames().size();
+        loadPresetIndex ((proc.getPresets().getCurrentPresetIndex() + 1) % n);
+    };
+    header.presetName.onClick = [this] { showPresetMenu(); };
+    header.save.onClick = [this] { showSavePopover(); };
+    header.revert.onClick = [this] { requestRevert(); };
+    header.ab.onChange = [this] (int slot) { proc.beginUndoTransaction ("A/B"); proc.selectAbSlot (slot); };
+    header.copy.onClick = [this] { proc.copyAbToOther(); };
+    header.undoRedo.undoButton.onClick = [this] { doUndo(); };
+    header.undoRedo.redoButton.onClick = [this] { doRedo(); };
+    header.menu.onClick = [this] { showMainMenu(); };
+    nav.onSelect = [this] (int m) { showTab (m); };
+
+    addMouseListener (this, true);   // every click starts a new undo step
+    setWantsKeyboardFocus (true);
+
+    // proportional resizing, the size is remembered with the session
+    auto& ui = proc.getUiState();
+    const int w = juce::jlimit (kMinWidth, kMaxWidth, (int) ui.getProperty ("width", kDesignWidth));
+    const int h = juce::jlimit (kMinHeight, kMaxHeight, (int) ui.getProperty ("height", kDesignHeight));
+    setResizable (true, true);
+    setResizeLimits (kMinWidth, kMinHeight, kMaxWidth, kMaxHeight);   // may resize (and store) before setSize
+    setSize (w, h);
+
+    showTab (juce::jlimit (0, 3, (int) ui.getProperty ("page", 0)));
+    header.tick();
+    startTimerHz (50);
 }
 
 BankMasterEditor::~BankMasterEditor()
 {
     stopTimer();
     removeMouseListener (this);
+    tooltips.setLookAndFeel (nullptr);
     setLookAndFeel (nullptr);
+}
+
+void BankMasterEditor::paint (juce::Graphics& g)
+{
+    const auto& pal = P();
+    const auto b = getLocalBounds().toFloat();
+    g.setGradientFill (juce::ColourGradient (pal.bg0, b.getCentreX(), b.getY(), pal.bg1, b.getCentreX(), b.getBottom(), false));
+    g.fillAll();
+    g.setGradientFill (juce::ColourGradient (pal.accent.withAlpha (0.035f), b.getCentreX(), b.getY() - 200 * uiScale,
+                                             pal.accent.withAlpha (0.0f), b.getCentreX(), b.getY() + 260 * uiScale, true));
+    g.fillRect (b);
+    // header / global-bar bands run across the full window width (seamless at any aspect ratio)
+    const auto c = content.getBoundsInParent().toFloat();
+    const float headerBottom = c.getY() + 64.0f * uiScale, barTop = c.getY() + (kDesignHeight - 62) * uiScale;
+    g.setColour (juce::Colours::black.withAlpha (0.22f));
+    g.fillRect (0.0f, 0.0f, b.getWidth(), headerBottom);
+    g.setColour (juce::Colours::black.withAlpha (0.25f));
+    g.fillRect (0.0f, barTop, b.getWidth(), b.getBottom() - barTop);
+    g.setColour (pal.edge);
+    g.fillRect (0.0f, headerBottom - uiScale, b.getWidth(), juce::jmax (1.0f, uiScale));
+    g.fillRect (0.0f, barTop, b.getWidth(), juce::jmax (1.0f, uiScale));
+}
+
+void BankMasterEditor::resized()
+{
+    const float sx = (float) getWidth() / kDesignWidth, sy = (float) getHeight() / kDesignHeight;
+    uiScale = juce::jmin (sx, sy);
+    const float ox = ((float) getWidth() - kDesignWidth * uiScale) * 0.5f;
+    const float oy = ((float) getHeight() - kDesignHeight * uiScale) * 0.5f;
+    content.setTransform (juce::AffineTransform::scale (uiScale).translated (ox, oy));
+
+    auto r = juce::Rectangle<int> (0, 0, kDesignWidth, kDesignHeight);
+    header.setBounds (r.removeFromTop (64));
+    nav.setBounds (r.removeFromTop (62));
+    globalBar.setBounds (r.removeFromBottom (62));
+    auto main = r.reduced (16, 8).withTrimmedBottom (4);
+    for (auto& pg : pages) pg->setBounds (main);
+    shield.setBounds (content.getLocalBounds());
+
+    auto& ui = proc.getUiState();
+    ui.setProperty ("width", getWidth(), nullptr);
+    ui.setProperty ("height", getHeight(), nullptr);
+    repaint();
 }
 
 void BankMasterEditor::mouseDown (const juce::MouseEvent&)
@@ -93,136 +130,168 @@ void BankMasterEditor::mouseDown (const juce::MouseEvent&)
     proc.beginUndoTransaction();
 }
 
+bool BankMasterEditor::keyPressed (const juce::KeyPress& k)
+{
+    const auto mods = k.getModifiers();
+    if (mods.isCommandDown() && (k.getKeyCode() == 'Z' || k.getKeyCode() == 'z'))
+    {
+        if (mods.isShiftDown()) doRedo(); else doUndo();
+        return true;
+    }
+    if (mods.isCommandDown() && (k.getKeyCode() == 'Y' || k.getKeyCode() == 'y')) { doRedo(); return true; }
+    if (k == juce::KeyPress::escapeKey && (revertPopover.isVisible() || savePopover.isVisible())) { cancelPopover(); return true; }
+    return false;
+}
+
 void BankMasterEditor::showTab (int index)
 {
     currentTab = juce::jlimit (0, 3, index);
-    for (int i = 0; i < 4; ++i)
-    {
-        pages[i]->setVisible (i == currentTab);
-        tabs[i].setToggleState (i == currentTab, juce::dontSendNotification);
-    }
-    repaint();
-}
-
-void BankMasterEditor::refreshPresetBox()
-{
-    auto& pm = proc.getPresets();
-    const auto names = pm.getAllPresetNames();
-    presetBox.clear (juce::dontSendNotification);
-    for (int i = 0; i < names.size(); ++i)
-    {
-        if (i == pm.getNumFactoryPresets()) presetBox.addSeparator();
-        presetBox.addItem (names[i], i + 1);
-    }
-    lastPresetName = pm.getCurrentPresetName();
-    lastPresetCount = names.size();
-    const int idx = names.indexOf (lastPresetName);
-    if (idx >= 0) presetBox.setSelectedItemIndex (idx, juce::dontSendNotification);
-    else presetBox.setText (lastPresetName, juce::dontSendNotification);
-}
-
-void BankMasterEditor::savePresetDialog()
-{
-    auto* w = new juce::AlertWindow ("Save preset", "Name for the user preset:", juce::MessageBoxIconType::NoIcon, this);
-    w->addTextEditor ("name", proc.getPresets().getCurrentPresetName() + " (user)");
-    w->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
-    w->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
-    w->enterModalState (true, juce::ModalCallbackFunction::create ([this, w] (int result)
-    {
-        if (result == 1)
-        {
-            const auto name = w->getTextEditorContents ("name");
-            if (! proc.getPresets().saveUserPreset (name))
-                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Save preset",
-                                                        "Could not save \"" + name + "\" (factory names are read-only).");
-            refreshPresetBox();
-        }
-    }), true);
+    for (int i = 0; i < 4; ++i) pages[(size_t) i]->setVisible (i == currentTab);
+    nav.setActive (currentTab);
+    proc.getUiState().setProperty ("page", currentTab, nullptr);
 }
 
 void BankMasterEditor::timerCallback()
 {
-    pages[currentTab]->tick();
-    meters.tick();
+    pages[(size_t) currentTab]->tick();
+    globalBar.tick();
+    nav.tick();
+    header.tick();
+}
+
+// ---------------------------------------------------------------------------- undo / revert
+void BankMasterEditor::doUndo()
+{
+    if (proc.getUndoManager().canUndo()) proc.undo();
+    header.tick();
+}
+
+void BankMasterEditor::doRedo()
+{
+    if (proc.getUndoManager().canRedo()) proc.redo();
+    header.tick();
+}
+
+void BankMasterEditor::requestRevert()
+{
+    if (! proc.getPresets().isModified()) return;
+    revertPopover.presetName = proc.getPresets().getCurrentPresetName();
+    shield.setVisible (true);
+    shield.toFront (false);
+    revertPopover.showUnder (header.revert.getBounds().translated (header.getX(), header.getY()), 380, 150);
+}
+
+void BankMasterEditor::confirmRevert()
+{
+    cancelPopover();
+    proc.beginUndoTransaction ("Revert to preset");
+    proc.getPresets().revertToCurrentPreset();
+    proc.beginUndoTransaction();   // closes the step: the revert is undone in one go
+    header.tick();
+}
+
+void BankMasterEditor::cancelPopover()
+{
+    revertPopover.setVisible (false);
+    savePopover.setVisible (false);
+    savePopover.message.clear();
+    shield.setVisible (false);
+}
+
+// ---------------------------------------------------------------------------- presets
+void BankMasterEditor::loadPresetIndex (int index)
+{
+    proc.beginUndoTransaction ("Load preset");
+    proc.getPresets().loadPreset (index);
+    proc.beginUndoTransaction();
+    header.tick();
+}
+
+void BankMasterEditor::showPresetMenu()
+{
     auto& pm = proc.getPresets();
-    if (pm.getCurrentPresetName() != lastPresetName || pm.getAllPresetNames().size() != lastPresetCount)
-        refreshPresetBox();
-    abA.setToggleState (proc.getAbSlot() == 0, juce::dontSendNotification);
-    abB.setToggleState (proc.getAbSlot() == 1, juce::dontSendNotification);
-    undo.setEnabled (proc.getUndoManager().canUndo());
-    redo.setEnabled (proc.getUndoManager().canRedo());
-    oneMaster.setEnabled (proc.getCurrentParams().oneMasterOn);
-}
-
-void BankMasterEditor::paint (juce::Graphics& g)
-{
-    const auto b = getLocalBounds().toFloat();
-    g.setGradientFill (juce::ColourGradient (theme::bgTop, 0, 0, theme::bgBottom, 0, b.getBottom(), false));
-    g.fillAll();
-    // subtle diagonal sheen
-    g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.35f), 0, 0, juce::Colours::white.withAlpha (0.0f), b.getWidth() * 0.6f, b.getHeight() * 0.5f, false));
-    g.fillRect (b);
-
-    // header / logo
-    auto header = getLocalBounds().removeFromTop (84).reduced (24, 10);
-    g.setColour (theme::text);
-    g.setFont (theme::font (34.0f, true));
-    g.drawText ("BANKMASTER", header.removeFromLeft (300).withTrimmedBottom (26), juce::Justification::bottomLeft);
-    auto sub = getLocalBounds().removeFromTop (84).reduced (24, 10).removeFromLeft (300).removeFromBottom (26);
-    g.setColour (theme::iceDeep);
-    g.setFont (theme::font (13.0f, true));
-    g.drawText ("by KALOX", sub.removeFromLeft (70), juce::Justification::centredLeft);
-    g.setColour (theme::textDim);
-    g.setFont (theme::font (11.5f, true));
-    g.drawText ("4-IN-1 MASTERING SUITE", sub, juce::Justification::centredLeft);
-
-    // ice accent line under the header
-    g.setGradientFill (juce::ColourGradient (theme::ice.withAlpha (0.0f), 0, 84, theme::ice, b.getWidth() * 0.5f, 84, false));
-    g.fillRect (24.0f, 83.0f, b.getWidth() * 0.5f - 24.0f, 2.0f);
-    g.setGradientFill (juce::ColourGradient (theme::ice, b.getWidth() * 0.5f, 84, theme::ice.withAlpha (0.0f), b.getWidth() - 24, 84, false));
-    g.fillRect (b.getWidth() * 0.5f, 83.0f, b.getWidth() * 0.5f - 24.0f, 2.0f);
-
-    // chain indicator next to the tabs
-    g.setColour (theme::textDim);
-    g.setFont (theme::font (11.0f, true));
-    g.drawText ("INPUT  >  EQ  >  SATURATION  >  COMPRESSOR  >  LIMITER  >  OUTPUT",
-                juce::Rectangle<int> (getWidth() - 470, 96, 446, 34), juce::Justification::centredRight);
-}
-
-void BankMasterEditor::resized()
-{
-    auto r = getLocalBounds();
-    auto header = r.removeFromTop (84).reduced (24, 16);
-    header.removeFromLeft (310);
-    // ONE MASTER (right)
-    auto one = header.removeFromRight (150);
-    oneMaster.setBounds (one.removeFromLeft (86).withTrimmedTop (-10).withHeight (78));
-    oneOn.setBounds (one.withSizeKeepingCentre (52, 26).translated (0, 8));
-    header.removeFromRight (16);
-    auto hb = header.withSizeKeepingCentre (header.getWidth(), 30);
-    prevPreset.setBounds (hb.removeFromLeft (30)); hb.removeFromLeft (4);
-    presetBox.setBounds (hb.removeFromLeft (250)); hb.removeFromLeft (4);
-    nextPreset.setBounds (hb.removeFromLeft (30)); hb.removeFromLeft (8);
-    savePreset.setBounds (hb.removeFromLeft (58)); hb.removeFromLeft (18);
-    abA.setBounds (hb.removeFromLeft (32)); hb.removeFromLeft (2);
-    abB.setBounds (hb.removeFromLeft (32)); hb.removeFromLeft (4);
-    abCopy.setBounds (hb.removeFromLeft (56)); hb.removeFromLeft (18);
-    undo.setBounds (hb.removeFromLeft (58)); hb.removeFromLeft (4);
-    redo.setBounds (hb.removeFromLeft (58));
-
-    // tabs
-    auto tabRow = r.removeFromTop (46).reduced (24, 6);
-    for (int i = 0; i < 4; ++i)
+    const auto names = pm.getAllPresetNames();
+    const auto current = pm.getCurrentPresetName();
+    juce::PopupMenu m;
+    m.addSectionHeader ("FACTORY");
+    for (int i = 0; i < names.size(); ++i)
     {
-        auto t = tabRow.removeFromLeft (170);
-        power[i]->setBounds (t.removeFromLeft (34).reduced (0, 1));
-        t.removeFromLeft (2);
-        tabs[i].setBounds (t);
-        tabRow.removeFromLeft (10);
+        if (i == pm.getNumFactoryPresets()) { m.addSeparator(); m.addSectionHeader ("USER"); }
+        m.addItem (i + 1, names[i].replace (" - ", juce::String (juce::CharPointer_UTF8 (" \xe2\x80\x94 "))), true, names[i] == current);
     }
+    m.addSeparator();
+    m.addItem (10001, juce::String (juce::CharPointer_UTF8 ("Save as\xe2\x80\xa6")));
+    const bool isUser = names.indexOf (current) >= pm.getNumFactoryPresets();
+    m.addItem (10002, "Delete \"" + current + "\"", isUser);
+    m.addItem (10003, "Show presets folder");
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&header.presetName).withMinimumWidth (header.presetName.getWidth()),
+                     [this, names, current] (int r)
+    {
+        if (r <= 0) return;
+        if (r <= names.size()) { loadPresetIndex (r - 1); return; }
+        if (r == 10001) showSavePopover();
+        if (r == 10002) proc.getPresets().deleteUserPreset (current);
+        if (r == 10003)
+        {
+            auto dir = PresetManager::getUserPresetDirectory();
+            dir.createDirectory();
+            dir.revealToUser();
+        }
+    });
+}
 
-    auto bottom = r.removeFromBottom (128).reduced (24, 8);
-    meters.setBounds (bottom);
-    auto pageArea = r.reduced (24, 6);
-    for (auto& pg : pages) pg->setBounds (pageArea);
+void BankMasterEditor::showSavePopover()
+{
+    auto name = proc.getPresets().getCurrentPresetName();
+    if (proc.getPresets().getAllPresetNames().indexOf (name) < proc.getPresets().getNumFactoryPresets()) name << " (user)";
+    savePopover.nameEditor.setText (name, false);
+    savePopover.nameEditor.selectAll();
+    savePopover.message.clear();
+    shield.setVisible (true);
+    shield.toFront (false);
+    savePopover.showUnder (header.save.getBounds().translated (header.getX(), header.getY()), 360, 150);
+    savePopover.nameEditor.grabKeyboardFocus();
+}
+
+void BankMasterEditor::commitSave()
+{
+    const auto name = savePopover.nameEditor.getText().trim();
+    if (proc.getPresets().saveUserPreset (name)) { cancelPopover(); header.tick(); return; }
+    savePopover.message = "Could not save \"" + name + "\" (empty or a factory name).";
+    savePopover.repaint();
+}
+
+void BankMasterEditor::showMainMenu()
+{
+    juce::PopupMenu sizes;
+    const int sz[][2] = { { 1080, 700 }, { 1200, 780 }, { 1400, 910 }, { 1600, 1040 }, { 2000, 1300 } };
+    for (int i = 0; i < 5; ++i)
+        sizes.addItem (100 + i, juce::String (sz[i][0]) + juce::String (juce::CharPointer_UTF8 (" \xc3\x97 ")) + juce::String (sz[i][1]) + (i == 1 ? "  (default)" : ""),
+                       true, getWidth() == sz[i][0] && getHeight() == sz[i][1]);
+    juce::PopupMenu m;
+    m.addSubMenu ("Window size", sizes);
+    m.addItem (2, "Show presets folder");
+    m.addSeparator();
+    m.addItem (3, juce::String ("BANKMASTER ") + JucePlugin_VersionString + juce::String (juce::CharPointer_UTF8 (" \xe2\x80\x94 BY KALOX")), false);
+    m.addItem (4, "Kalox Audio", false);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&header.menu), [this, sz] (int r)
+    {
+        if (r >= 100 && r < 105) setSize (sz[r - 100][0], sz[r - 100][1]);
+        if (r == 2)
+        {
+            auto dir = PresetManager::getUserPresetDirectory();
+            dir.createDirectory();
+            dir.revealToUser();
+        }
+    });
+}
+
+// ---------------------------------------------------------------------------- tests
+juce::Array<juce::Component*> BankMasterEditor::getAllBoundControls()
+{
+    juce::Array<juce::Component*> all;
+    for (auto& pg : pages) all.addArray (pg->getBoundControls());
+    all.add (&header.oneOn, &header.oneAmt, &nav.inGain, &nav.outGain, &globalBar.target, &globalBar.bypass);
+    for (auto& n : nav.nodes) all.add (&n->power);
+    return all;
 }

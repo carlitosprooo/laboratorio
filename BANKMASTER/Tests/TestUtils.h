@@ -1,4 +1,4 @@
-// BANKMASTER by KALOX — minimal test framework + measurement helpers.
+// BANKMASTER BY KALOX — minimal test framework + measurement helpers.
 // Measurement code here is deliberately independent from the plugin DSP
 // (own FFT, own high-resolution true-peak reference).
 #pragma once

@@ -1,18 +1,22 @@
-; BANKMASTER by KALOX — Windows x64 installer (Inno Setup 6)
+; BANKMASTER BY KALOX — Windows x64 installer (Inno Setup 6)
 ;
 ; Build:
 ;   ISCC.exe /DArtefacts="<repo>\build\BankMaster_artefacts\Release" /DOutDir="<repo>\BANKMASTER\dist" BANKMASTER.iss
 ;
 ; Installs:
 ;   VST3        -> C:\Program Files\Common Files\VST3\BANKMASTER.vst3   (standard VST3 location)
-;   Standalone  -> C:\Program Files\KALOX\BANKMASTER\BANKMASTER.exe      (+ Start menu shortcut)
+;   Standalone  -> C:\Program Files\Kalox Audio\BANKMASTER\BANKMASTER.exe (+ Start menu shortcut)
 ; The uninstaller removes exactly these files. User presets in %APPDATA%\KALOX\BANKMASTER are kept.
 ; No other plug-in (e.g. KaloxStart, KaloxSooth) is touched.
+;
+; Upgrade from 1.0: same AppId, so 2.0 replaces 1.0 in "Apps & features". The 1.0 standalone
+; folder (Program Files\KALOX\BANKMASTER), its Start-menu group and its registry key are removed;
+; the VST3 bundle is replaced in place (same plug-in IDs: existing projects keep loading it).
 
-#define AppName      "BANKMASTER by KALOX"
+#define AppName      "BANKMASTER BY KALOX"
 #define AppShortName "BANKMASTER"
-#define AppVersion   "1.0.0"
-#define AppPublisher "KALOX"
+#define AppVersion   "2.0.0"
+#define AppPublisher "Kalox Audio"
 #ifndef Artefacts
   #define Artefacts "..\..\..\build\BankMaster_artefacts\Release"
 #endif
@@ -26,22 +30,24 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
-AppCopyright=(c) 2026 KALOX
+AppCopyright=(c) 2026 Kalox Audio
 VersionInfoVersion={#AppVersion}.0
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription={#AppName} {#AppVersion} Setup
 VersionInfoProductName={#AppName}
 VersionInfoProductVersion={#AppVersion}
-DefaultDirName={autopf}\KALOX\{#AppShortName}
+DefaultDirName={autopf}\Kalox Audio\{#AppShortName}
+UsePreviousAppDir=no
 DisableDirPage=yes
-DefaultGroupName=KALOX\{#AppShortName}
+DefaultGroupName=Kalox Audio\{#AppShortName}
+UsePreviousGroup=no
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 PrivilegesRequired=admin
 OutputDir={#OutDir}
-OutputBaseFilename=BANKMASTER-by-KALOX-{#AppVersion}-Windows-x64-Setup
+OutputBaseFilename=BANKMASTER-BY-KALOX-{#AppVersion}-Windows-x64-Setup
 SetupIconFile=..\assets\bankmaster.ico
 UninstallDisplayIcon={app}\bankmaster.ico
 UninstallDisplayName={#AppName}
@@ -68,7 +74,7 @@ Name: "custom";   Description: "Custom"; Flags: iscustom
 
 [Components]
 Name: "vst3";       Description: "VST3 plug-in  (Common Files\VST3\BANKMASTER.vst3)"; Types: full vst3only custom
-Name: "standalone"; Description: "Standalone application  (Program Files\KALOX\BANKMASTER)"; Types: full
+Name: "standalone"; Description: "Standalone application  (Program Files\Kalox Audio\BANKMASTER)"; Types: full
 
 [Files]
 ; VST3 bundle (only the bundle produced by the build: binary + moduleinfo.json)
@@ -85,11 +91,25 @@ Name: "{group}\Read Me"; Filename: "{app}\Read Me.txt"
 Name: "{group}\Uninstall BANKMASTER"; Filename: "{uninstallexe}"; IconFilename: "{app}\bankmaster.ico"
 
 [Registry]
-Root: HKLM64; Subkey: "Software\KALOX"; Flags: uninsdeletekeyifempty
-Root: HKLM64; Subkey: "Software\KALOX\BANKMASTER"; Flags: uninsdeletekey
-Root: HKLM64; Subkey: "Software\KALOX\BANKMASTER"; ValueType: string; ValueName: "Version"; ValueData: "{#AppVersion}"
-Root: HKLM64; Subkey: "Software\KALOX\BANKMASTER"; ValueType: string; ValueName: "InstallDir"; ValueData: "{app}"
-Root: HKLM64; Subkey: "Software\KALOX\BANKMASTER"; ValueType: string; ValueName: "VST3Path"; ValueData: "{commoncf64}\VST3\BANKMASTER.vst3"; Components: vst3
+; 1.0 key (vendor was "KALOX"): removed on upgrade
+Root: HKLM64; Subkey: "Software\KALOX\BANKMASTER"; ValueType: none; Flags: deletekey noerror
+Root: HKLM64; Subkey: "Software\Kalox Audio"; Flags: uninsdeletekeyifempty
+Root: HKLM64; Subkey: "Software\Kalox Audio\BANKMASTER"; Flags: uninsdeletekey
+Root: HKLM64; Subkey: "Software\Kalox Audio\BANKMASTER"; ValueType: string; ValueName: "Version"; ValueData: "{#AppVersion}"
+Root: HKLM64; Subkey: "Software\Kalox Audio\BANKMASTER"; ValueType: string; ValueName: "InstallDir"; ValueData: "{app}"
+Root: HKLM64; Subkey: "Software\Kalox Audio\BANKMASTER"; ValueType: string; ValueName: "VST3Path"; ValueData: "{commoncf64}\VST3\BANKMASTER.vst3"; Components: vst3
+
+[InstallDelete]
+; leftovers of a 1.0 installation (standalone folder and Start-menu group under "KALOX")
+Type: files; Name: "{autopf}\KALOX\BANKMASTER\BANKMASTER.exe"
+Type: files; Name: "{autopf}\KALOX\BANKMASTER\bankmaster.ico"
+Type: files; Name: "{autopf}\KALOX\BANKMASTER\Read Me.txt"
+Type: files; Name: "{autopf}\KALOX\BANKMASTER\unins000.exe"
+Type: files; Name: "{autopf}\KALOX\BANKMASTER\unins000.dat"
+Type: dirifempty; Name: "{autopf}\KALOX\BANKMASTER"
+Type: dirifempty; Name: "{autopf}\KALOX"
+Type: filesandordirs; Name: "{autoprograms}\KALOX\BANKMASTER"
+Type: dirifempty; Name: "{autoprograms}\KALOX"
 
 [UninstallDelete]
 Type: dirifempty; Name: "{commoncf64}\VST3\BANKMASTER.vst3\Contents\x86_64-win"
@@ -97,7 +117,15 @@ Type: dirifempty; Name: "{commoncf64}\VST3\BANKMASTER.vst3\Contents\Resources"
 Type: dirifempty; Name: "{commoncf64}\VST3\BANKMASTER.vst3\Contents"
 Type: dirifempty; Name: "{commoncf64}\VST3\BANKMASTER.vst3"
 Type: dirifempty; Name: "{app}"
-Type: dirifempty; Name: "{autopf}\KALOX"
+Type: dirifempty; Name: "{autopf}\Kalox Audio"
 
 [Run]
 Filename: "{app}\Read Me.txt"; Description: "Open the Read Me"; Flags: postinstall shellexec skipifsilent unchecked
+
+[Code]
+// The 1.0 registry parent key "Software\KALOX" is removed only when nothing else uses it.
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    RegDeleteKeyIfEmpty(HKLM64, 'Software\KALOX');
+end;

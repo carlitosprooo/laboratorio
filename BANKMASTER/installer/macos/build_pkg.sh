@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# BANKMASTER by KALOX — macOS installer (.pkg) with selectable VST3 / AU / Standalone.
+# BANKMASTER BY KALOX — macOS installer (.pkg) with selectable VST3 / AU / Standalone.
 # Usage: installer/macos/build_pkg.sh [path/to/BankMaster_artefacts/Release]
 #
 # Signing / notarisation (optional, needs an Apple Developer ID):
@@ -71,7 +71,7 @@ sed "s/@VERSION@/$VERSION/g" "$HERE/distribution.xml" > "$WORK/distribution.xml"
 mkdir -p "$WORK/resources"
 cp "$HERE/resources/"* "$WORK/resources/"
 
-PKG="$OUT/BANKMASTER-by-KALOX-$VERSION-macOS-universal.pkg"
+PKG="$OUT/BANKMASTER-BY-KALOX-$VERSION-macOS-universal.pkg"
 SIGN_ARGS=()
 [[ -n "${BM_SIGN_INSTALLER:-}" ]] && SIGN_ARGS=(--sign "$BM_SIGN_INSTALLER")
 productbuild --distribution "$WORK/distribution.xml" --resources "$WORK/resources" \

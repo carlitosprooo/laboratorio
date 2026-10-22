@@ -1,4 +1,4 @@
-// BANKMASTER by KALOX — audio processor (single instance, full chain)
+// BANKMASTER BY KALOX — audio processor (single instance, full chain)
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -69,6 +69,10 @@ public:
     void selectAbSlot (int slot);
     void copyAbToOther();
 
+    /** Editor preferences saved with the session but outside the parameter state
+        (window size, EQ display range, analyzer mode, open page). Message thread only. */
+    juce::ValueTree& getUiState() noexcept { return uiState; }
+
     /** Number of samples processed since prepare (for tests / diagnostics). */
     juce::int64 getProcessedSamples() const noexcept { return processed.load(); }
 
@@ -95,6 +99,7 @@ private:
     juce::ValueTree abSlots[2];
     int abSlot = 0;
     bool learning = false;
+    juce::ValueTree uiState { "UI" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BankMasterProcessor)
 };

@@ -1,4 +1,4 @@
-// BANKMASTER by KALOX — parameter layout and ChainParams <-> APVTS mapping
+// BANKMASTER BY KALOX — parameter layout and ChainParams <-> APVTS mapping
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -60,5 +60,9 @@ void replaceStateAndSync (juce::AudioProcessorValueTreeState& s, const juce::Val
 
 /** Writes a ChainParams snapshot into the parameters (message thread, notifies host). */
 void writeChainToState (juce::AudioProcessorValueTreeState& s, const bm::ChainParams& p);
+
+/** Calls set (parameterId, plainValue) for every parameter a ChainParams snapshot defines
+    (the same values writeChainToState writes). */
+void forEachChainValue (const bm::ChainParams& p, const std::function<void (const juce::String&, float)>& set);
 
 } // namespace bmp

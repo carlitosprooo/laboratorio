@@ -1,4 +1,4 @@
-// BANKMASTER by KALOX — DSP unit tests (framework-free, run on every platform / arch).
+// BANKMASTER BY KALOX — DSP unit tests (framework-free, run on every platform / arch).
 #include "TestUtils.h"
 #include "../Source/DSP/FactoryPresets.h"
 

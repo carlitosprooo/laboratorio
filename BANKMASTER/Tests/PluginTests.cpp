@@ -1,4 +1,4 @@
-// BANKMASTER by KALOX — plugin-level tests (JUCE wrapper): state, presets, automation,
+// BANKMASTER BY KALOX — plugin-level tests (JUCE wrapper): state, presets, automation,
 // A/B, undo/redo, bus layouts, latency reporting, editor creation + UI snapshots.
 //   bankmaster_plugin_tests [--snapshot <dir>]
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -6,6 +6,7 @@
 #include "../Source/Plugin/PluginProcessor.h"
 #include "../Source/Plugin/PluginEditor.h"
 #include <thread>
+#include <map>
 
 namespace
 {
@@ -46,6 +47,27 @@ void runTest (const char* name, const std::function<void()>& fn)
     std::printf ("[ RUN  ] %s\n", name);
     fn();
     std::printf ("[ %s ] %s\n", failures == before ? " OK " : "FAIL", name);
+}
+
+/** Denser program for the UI snapshots: the music signal plus pink noise, so the
+    analyser shows a realistic broadband spectrum instead of isolated test tones. */
+void fillRich (juce::AudioBuffer<float>& b, double fs, int offset, float level)
+{
+    fillMusic (b, fs, offset, level);
+    static juce::Random rng (11);
+    static double s[2][7] {};
+    for (int c = 0; c < b.getNumChannels(); ++c)
+        for (int i = 0; i < b.getNumSamples(); ++i)
+        {
+            const double w = rng.nextFloat() * 2.0 - 1.0;
+            auto& k = s[c];
+            k[0] = 0.99886 * k[0] + w * 0.0555179; k[1] = 0.99332 * k[1] + w * 0.0750759;
+            k[2] = 0.96900 * k[2] + w * 0.1538520; k[3] = 0.86650 * k[3] + w * 0.3104856;
+            k[4] = 0.55000 * k[4] + w * 0.5329522; k[5] = -0.7616 * k[5] - w * 0.0168980;
+            const double pink = (k[0] + k[1] + k[2] + k[3] + k[4] + k[5] + k[6] + w * 0.5362) * 0.11;
+            k[6] = w * 0.115926;
+            b.addSample (c, i, (float) (level * 0.6 * pink));
+        }
 }
 
 bool hasDisplay()
@@ -302,41 +324,298 @@ int main (int argc, char** argv)
         PCHECK (finite);
     });
 
-    runTest ("editor_creation_and_snapshots", [&]
+    // ------------------------------------------------------------------------------- V2 editor
+    auto pump = [] (int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil (ms); };
+    auto feed = [] (BankMasterProcessor& p, int blocks, int offset)
+    {
+        juce::AudioBuffer<float> buf (2, 512); juce::MidiBuffer midi;
+        for (int b = 0; b < blocks; ++b) { fillRich (buf, 48000.0, (offset + b) * 512, 0.12f); p.processBlock (buf, midi); }
+    };
+    auto makeEditor = [] (BankMasterProcessor& p)
+    {
+        std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+        return std::unique_ptr<BankMasterEditor> (dynamic_cast<BankMasterEditor*> (ed.release()));
+    };
+    // every visible component lies inside its parent (nothing cut off), recursively
+    std::function<int (juce::Component&)> countOutside = [&] (juce::Component& c) -> int
+    {
+        int n = 0;
+        for (auto* ch : c.getChildren())
+        {
+            if (! ch->isVisible() || ch->getWidth() <= 0) continue;
+            if (! c.getLocalBounds().contains (ch->getBounds())) { ++n; PREPORT ("outside: %s in %s", ch->getName().toRawUTF8(), c.getName().toRawUTF8()); }
+            n += countOutside (*ch);
+        }
+        return n;
+    };
+
+    runTest ("v2_editor_sizes_and_proportional_layout", [&]
+    {
+        if (! hasDisplay()) { PREPORT ("no display: skipped (run under xvfb-run)"); return; }
+        BankMasterProcessor p;
+        auto e = makeEditor (p);
+        PCHECK (e != nullptr);
+        PCHECK (e->getWidth() == 1200 && e->getHeight() == 780);
+        PCHECK (std::abs (e->getUiScale() - 1.0f) < 1e-6f);
+        PCHECK (countOutside (e->getContent()) == 0);
+        auto* c = e->getConstrainer();
+        PCHECK (c != nullptr && c->getMinimumWidth() == 1080 && c->getMinimumHeight() == 700
+                && c->getMaximumWidth() == 2000 && c->getMaximumHeight() == 1300);
+        const int sizes[][2] = { { 1080, 700 }, { 1200, 780 }, { 1600, 1040 }, { 2000, 1300 }, { 1500, 760 }, { 1100, 1000 } };
+        for (auto& sz : sizes)
+        {
+            e->setSize (sz[0], sz[1]);
+            const auto shown = e->getContent().getBoundsInParent();   // content after the proportional transform
+            const auto t = e->getContent().getTransform();
+            const auto scaled = juce::Rectangle<float> (0, 0, 1200, 780).transformedBy (t);
+            PREPORT ("%d x %d -> scale %.3f, content %.1f x %.1f at (%.1f, %.1f)", sz[0], sz[1], e->getUiScale(),
+                     scaled.getWidth(), scaled.getHeight(), scaled.getX(), scaled.getY());
+            juce::ignoreUnused (shown);
+            PCHECK (scaled.getX() >= -0.01f && scaled.getY() >= -0.01f);
+            PCHECK (scaled.getRight() <= (float) sz[0] + 0.01f && scaled.getBottom() <= (float) sz[1] + 0.01f);
+            PCHECK (std::abs (scaled.getWidth() - sz[0]) < 0.6f || std::abs (scaled.getHeight() - sz[1]) < 0.6f); // fills one axis
+        }
+        // 1080 x 700 is the smallest allowed size; the smallest text then measures 10.5 px * 0.897 = 9.4 px
+        e->setSize (1080, 700);
+        PCHECK (e->getUiScale() > 0.89f);
+    });
+
+    runTest ("v2_every_parameter_bound_to_a_control_both_ways", [&]
+    {
+        if (! hasDisplay()) { PREPORT ("no display: skipped (run under xvfb-run)"); return; }
+        BankMasterProcessor p;
+        auto e = makeEditor (p);
+        std::map<juce::String, int> covered;
+        auto& eqPage = e->getEqPage();
+        int bindingFailures = 0;
+        auto checkControl = [&] (juce::Component* c)
+        {
+            const auto pid = c->getComponentID();
+            auto* prm = p.getState().getParameter (pid);
+            if (prm == nullptr) { ++bindingFailures; PREPORT ("control without parameter: %s", c->getName().toRawUTF8()); return; }
+            covered[pid]++;
+            const float orig = prm->getValue();
+            // host -> UI
+            const float target = orig < 0.5f ? 0.8f : 0.2f;
+            prm->setValueNotifyingHost (target);
+            const float hostVal = prm->getValue();
+            bool uiOk = false;
+            if (auto* k = dynamic_cast<juce::Slider*> (c)) uiOk = std::abs (prm->convertTo0to1 ((float) k->getValue()) - hostVal) < 1e-3f;
+            else if (auto* t = dynamic_cast<bmui::ParamToggle*> (c)) uiOk = t->getToggleState() == (hostVal > 0.5f);
+            else if (auto* sg = dynamic_cast<bmui::ParamSegmented*> (c)) uiOk = sg->getSelectedIndex() == juce::roundToInt (prm->convertFrom0to1 (hostVal));
+            else if (auto* cb = dynamic_cast<bmui::ParamSelector*> (c)) uiOk = cb->getSelectedItemIndex() == juce::roundToInt (prm->convertFrom0to1 (hostVal));
+            if (! uiOk) { ++bindingFailures; PREPORT ("host->UI failed: %s", pid.toRawUTF8()); }
+            // UI -> host
+            bool hostOk = false;
+            if (auto* k = dynamic_cast<juce::Slider*> (c))
+            {
+                const double v = k->proportionOfLengthToValue (orig < 0.5f ? 0.3 : 0.7);
+                k->setValue (v, juce::sendNotificationSync);
+                hostOk = std::abs (prm->getValue() - prm->convertTo0to1 ((float) v)) < 1e-3f;
+            }
+            else if (auto* t = dynamic_cast<bmui::ParamToggle*> (c))
+            {
+                const bool want = ! t->getToggleState();
+                t->setToggleState (want, juce::sendNotificationSync);
+                hostOk = (prm->getValue() > 0.5f) == want;
+            }
+            else if (auto* sg = dynamic_cast<bmui::ParamSegmented*> (c))
+            {
+                const int want = sg->getSelectedIndex() == 0 ? 1 : 0;
+                sg->choose (want);
+                hostOk = juce::roundToInt (prm->convertFrom0to1 (prm->getValue())) == want;
+            }
+            else if (auto* cb = dynamic_cast<bmui::ParamSelector*> (c))
+            {
+                const int want = cb->getSelectedItemIndex() == 0 ? 1 : 0;
+                cb->setSelectedItemIndex (want, juce::sendNotificationSync);
+                hostOk = juce::roundToInt (prm->convertFrom0to1 (prm->getValue())) == want;
+            }
+            if (! hostOk) { ++bindingFailures; PREPORT ("UI->host failed: %s", pid.toRawUTF8()); }
+            prm->setValueNotifyingHost (orig);
+        };
+        for (int b = 0; b < bm::kNumEqBands; ++b)
+        {
+            eqPage.selectBand (b);
+            for (auto* c : e->getAllBoundControls())
+            {
+                const auto pid = c->getComponentID();
+                const bool eqBandControl = pid.startsWith ("eq") && pid.containsChar ('_') && pid != bmp::id::eqOn;
+                if (eqBandControl || b == 0) checkControl (c);
+            }
+        }
+        int missing = 0;
+        for (auto* prm : p.getParameters())
+            if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (prm))
+                if (covered.find (rp->getParameterID()) == covered.end()) { ++missing; PREPORT ("no control for %s", rp->getParameterID().toRawUTF8()); }
+        PREPORT ("%d parameters, %d covered by controls, %d binding failures", p.getParameters().size(), (int) covered.size(), bindingFailures);
+        PCHECK (missing == 0);
+        PCHECK (bindingFailures == 0);
+        PCHECK ((int) covered.size() == p.getParameters().size());
+    });
+
+    runTest ("v2_undo_redo_buttons_and_revert_with_confirmation", [&]
+    {
+        if (! hasDisplay()) { PREPORT ("no display: skipped (run under xvfb-run)"); return; }
+        BankMasterProcessor p;
+        p.setCurrentProgram (0);
+        auto e = makeEditor (p);
+        auto& h = e->getHeader();
+        auto& um = p.getUndoManager();
+        p.beginUndoTransaction();
+        um.clearUndoHistory();
+        e->getHeader().tick();
+        PCHECK (! p.getPresets().isModified());
+        PCHECK (! h.revert.isEnabled());
+        PCHECK (! h.undoRedo.undoButton.isEnabled() && ! h.undoRedo.redoButton.isEnabled());
+
+        // a user edit (gesture as the knob makes it)
+        p.beginUndoTransaction ("edit");
+        setParam (p, bmp::id::compThr, -26.0f);
+        setParam (p, bmp::id::limGain, 8.5f);
+        p.beginUndoTransaction();
+        h.tick();
+        PCHECK (p.getPresets().isModified());
+        PCHECK (h.presetName.modified);
+        PCHECK (h.revert.isEnabled());
+        PCHECK (h.undoRedo.undoButton.isEnabled());
+
+        // revert asks first; cancel keeps the edit
+        h.revert.triggerClick();
+        pump (50);
+        PCHECK (e->isRevertPopoverVisible());
+        e->cancelPopover();
+        PCHECK (! e->isRevertPopoverVisible());
+        PCHECK (std::abs (getParam (p, bmp::id::compThr) + 26.0f) < 1e-3f);
+
+        // confirm restores the preset exactly
+        e->requestRevert();
+        PCHECK (e->isRevertPopoverVisible());
+        e->confirmRevert();
+        PCHECK (! e->isRevertPopoverVisible());
+        PCHECK (std::abs (getParam (p, bmp::id::compThr) + 18.0f) < 1e-3f);
+        PCHECK (std::abs (getParam (p, bmp::id::limGain) - 11.0f) < 1e-3f);
+        h.tick();
+        PCHECK (! p.getPresets().isModified());
+        PCHECK (! h.revert.isEnabled());
+
+        // the revert is one undo step: the UNDO arrow brings the edit back, REDO reverts again
+        h.undoRedo.undoButton.triggerClick();
+        pump (50);
+        PCHECK (std::abs (getParam (p, bmp::id::compThr) + 26.0f) < 1e-3f);
+        PCHECK (std::abs (getParam (p, bmp::id::limGain) - 8.5f) < 1e-3f);
+        h.tick();
+        PCHECK (p.getPresets().isModified());
+        PCHECK (h.undoRedo.redoButton.isEnabled());
+        h.undoRedo.redoButton.triggerClick();
+        pump (50);
+        PCHECK (std::abs (getParam (p, bmp::id::compThr) + 18.0f) < 1e-3f);
+        PCHECK (std::abs (getParam (p, bmp::id::limGain) - 11.0f) < 1e-3f);
+        // and the original edit itself can be undone back to the preset
+        e->doUndo();
+        e->doUndo();
+        PCHECK (std::abs (getParam (p, bmp::id::compThr) + 18.0f) < 1e-3f);
+
+        // keyboard shortcuts
+        p.beginUndoTransaction ("edit2");
+        setParam (p, bmp::id::satDrive, 55.0f);
+        p.beginUndoTransaction();
+        PCHECK (e->keyPressed (juce::KeyPress ('z', juce::ModifierKeys::commandModifier, 0)));
+        PCHECK (std::abs (getParam (p, bmp::id::satDrive) - 20.0f) < 1e-3f);
+        PCHECK (e->keyPressed (juce::KeyPress ('z', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier, 0)));
+        PCHECK (std::abs (getParam (p, bmp::id::satDrive) - 55.0f) < 1e-3f);
+
+        // revert of a user preset returns to the saved file values
+        PCHECK (p.getPresets().saveUserPreset ("Revert Test"));
+        setParam (p, bmp::id::limCeil, -1.0f);
+        h.tick();
+        PCHECK (p.getPresets().isModified());
+        e->requestRevert();
+        e->confirmRevert();
+        PCHECK (std::abs (getParam (p, bmp::id::limCeil) + 0.1f) < 1e-3f);
+        PCHECK (std::abs (getParam (p, bmp::id::satDrive) - 55.0f) < 1e-3f);
+        PCHECK (! p.getPresets().isModified());
+        p.getPresets().deleteUserPreset ("Revert Test");
+    });
+
+    runTest ("v2_ab_presets_navigation_and_ui_state", [&]
+    {
+        if (! hasDisplay()) { PREPORT ("no display: skipped (run under xvfb-run)"); return; }
+        BankMasterProcessor p;
+        p.setCurrentProgram (0);
+        {
+            auto e = makeEditor (p);
+            auto& h = e->getHeader();
+            h.next.triggerClick(); pump (30);
+            PCHECK (p.getPresets().getCurrentPresetIndex() == 1);
+            h.prev.triggerClick(); pump (30);
+            PCHECK (p.getPresets().getCurrentPresetIndex() == 0);
+            setParam (p, bmp::id::limGain, 4.0f);
+            h.ab.choose (1);
+            PCHECK (p.getAbSlot() == 1);
+            setParam (p, bmp::id::limGain, 9.0f);
+            h.ab.choose (0);
+            PCHECK (std::abs (getParam (p, bmp::id::limGain) - 4.0f) < 1e-3f);
+            // navigation: clicking a module node opens its page
+            e->getNavStrip().nodes[2]->triggerClick(); pump (30);
+            PCHECK (e->getCurrentTab() == 2);
+            e->getEqPage().selectBand (4);
+            e->setSize (1400, 910);
+        }
+        juce::MemoryBlock mb;
+        p.getStateInformation (mb);
+        BankMasterProcessor q;
+        q.setStateInformation (mb.getData(), (int) mb.getSize());
+        auto e2 = makeEditor (q);
+        PCHECK (e2->getWidth() == 1400 && e2->getHeight() == 910);
+        PCHECK (e2->getCurrentTab() == 2);
+        PCHECK (e2->getEqPage().getSelectedBand() == 4);
+        PCHECK (std::abs (q.getState().getRawParameterValue (bmp::id::limGain)->load() - 4.0f) < 1e-3f);
+        // the UI preferences never end up in the parameter tree / presets
+        PCHECK (! q.getState().state.getChildWithName ("UI").isValid());
+    });
+
+    runTest ("v2_snapshots_all_pages_sizes_and_scales", [&]
     {
         if (! hasDisplay()) { PREPORT ("no display: skipped (run under xvfb-run)"); return; }
         BankMasterProcessor p;
         p.setPlayConfigDetails (2, 2, 48000.0, 512);
         p.prepareToPlay (48000.0, 512);
-        std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
-        PCHECK (ed != nullptr);
-        auto* e = dynamic_cast<BankMasterEditor*> (ed.get());
-        PCHECK (e != nullptr && e->getWidth() == BankMasterEditor::kWidth);
-        // feed audio so meters/analyser show real data
-        juce::AudioBuffer<float> buf (2, 512); juce::MidiBuffer midi;
+        auto e = makeEditor (p);
+        const char* names[] = { "eq", "saturation", "compressor", "limiter" };
+        struct Shot { int w, h; float scale; const char* tag; };
+        // 2x = Retina; 1.25x / 1.5x = Windows display scaling; 1080 x 700 at 1x = smallest window on a 100 % screen
+        const Shot shots[] = { { 1200, 780, 1.0f, "1200x780_1x" }, { 1200, 780, 2.0f, "1200x780_2x" },
+                               { 1200, 780, 1.25f, "1200x780_125pct" }, { 1200, 780, 1.5f, "1200x780_150pct" },
+                               { 1080, 700, 1.0f, "1080x700_1x" }, { 2000, 1300, 1.0f, "2000x1300_1x" } };
+        int offset = 0;
         for (int tab = 0; tab < 4; ++tab)
         {
+            e->setSize (1200, 780);
             e->showTab (tab);
-            for (int b = 0; b < 40; ++b)
+            for (int b = 0; b < 150; ++b)   // ~1.6 s of audio so meters, analyser and histories are filled
             {
-                fillMusic (buf, 48000.0, b * 512 + tab * 20000, 0.12f);
-                p.processBlock (buf, midi);
-                juce::MessageManager::getInstance()->runDispatchLoopUntil (12);
+                feed (p, 1, offset++);
+                if (b % 3 == 0) pump (20);
             }
-            if (snapshotDir.isNotEmpty())
+            for (auto& s : shots)
             {
-                const char* names[] = { "eq", "saturation", "compressor", "limiter" };
-                auto img = e->createComponentSnapshot (e->getLocalBounds(), true, 1.0f);
-                auto f = juce::File (snapshotDir).getChildFile (juce::String ("bankmaster_") + names[tab] + ".png");
+                if (snapshotDir.isEmpty()) break;
+                if (tab > 0 && (s.w != 1200 || s.scale == 1.25f || s.scale == 1.5f)) continue;   // every page at 1x / 2x, the EQ page at every size and scale
+                e->setSize (s.w, s.h);
+                pump (30);
+                auto img = e->createComponentSnapshot (e->getLocalBounds(), true, s.scale);
+                PCHECK (img.getWidth() == juce::roundToInt (s.w * s.scale));
+                auto f = juce::File (snapshotDir).getChildFile (juce::String ("v2_") + names[tab] + "_" + s.tag + ".png");
                 f.getParentDirectory().createDirectory();
                 f.deleteFile();
                 juce::FileOutputStream os (f);
                 juce::PNGImageFormat png;
                 PCHECK (os.openedOk() && png.writeImageToStream (img, os));
-                PREPORT ("snapshot %s", f.getFullPathName().toRawUTF8());
+                PREPORT ("snapshot %s", f.getFileName().toRawUTF8());
             }
         }
-        ed.reset();
+        e->setSize (1200, 780);
     });
 
     tempPresetDir.deleteRecursively();
