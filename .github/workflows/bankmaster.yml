@@ -117,7 +117,13 @@ jobs:
           hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MNT" | tee -a $R
           echo "== DMG contents" | tee -a $R
           ls -la "$MNT" | tee -a $R
-          test -f "$MNT/.DS_Store" && test -f "$MNT/.VolumeIcon.icns" && ls "$MNT/.background" | tee -a $R
+          # dmgbuild layout: Finder settings, volume icon and Retina background at the volume root
+          test -f "$MNT/.DS_Store"
+          test -f "$MNT/.VolumeIcon.icns"
+          test -f "$MNT/.background.tiff"
+          test -x "$MNT/Uninstall BANKMASTER.command"
+          test -f "$MNT/Read Me - Leia-me.txt"
+          echo "layout files present: .DS_Store .VolumeIcon.icns .background.tiff; uninstaller is executable" | tee -a $R
           cmp "$MNT/Install BANKMASTER.pkg" "$PKG"
           echo "pkg inside the DMG is byte-identical to the validated pkg ($(shasum -a 256 "$PKG" | cut -c1-16)...)" | tee -a $R
           echo "== signatures" | tee -a $R
