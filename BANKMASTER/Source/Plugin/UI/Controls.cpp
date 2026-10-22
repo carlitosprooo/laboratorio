@@ -238,18 +238,21 @@ void ParamKnob::showValueEditor()
     editor->setText (paramText (*param).upToFirstOccurrenceOf (" ", false, false), false);
     editor->selectAll();
     editor->setBounds (knobValueRect (getLocalBounds().toFloat(), size).toNearestInt());
-    auto commit = [this]
+    // the editor is removed asynchronously (never from inside its own callbacks)
+    const juce::Component::SafePointer<ParamKnob> safe (this);
+    auto close = [safe] { juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->editor.reset(); }); };
+    auto commit = [this, close]
     {
         if (editor == nullptr || param == nullptr) return;
         const float v = param->getValueForText (editor->getText());
         param->beginChangeGesture();
         param->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, v));
         param->endChangeGesture();
-        juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<ParamKnob> (this)] { if (sp != nullptr) sp->editor.reset(); });
+        close();
     };
     editor->onReturnKey = commit;
     editor->onFocusLost = commit;
-    editor->onEscapeKey = [this] { juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<ParamKnob> (this)] { if (sp != nullptr) sp->editor.reset(); }); };
+    editor->onEscapeKey = close;
     addAndMakeVisible (*editor);
     editor->grabKeyboardFocus();
 }
