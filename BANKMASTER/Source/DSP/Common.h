@@ -47,7 +47,7 @@ public:
     {
        #if BM_HAS_SSE
         prev = _mm_getcsr();
-        _mm_setcsr (prev | 0x8040); // FTZ | DAZ
+        _mm_setcsr ((unsigned) (prev | 0x8040)); // FTZ | DAZ
        #elif defined(__aarch64__)
         uint64_t fpcr;
         asm volatile ("mrs %0, fpcr" : "=r"(fpcr));

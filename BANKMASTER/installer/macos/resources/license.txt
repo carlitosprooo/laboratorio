@@ -1,0 +1,12 @@
+BANKMASTER by KALOX - End User Terms
+
+Copyright (c) 2026 KALOX. All rights reserved.
+
+BANKMASTER is provided "as is", without warranty of any kind. Presets are starting
+points for mastering, not guarantees of a finished master suitable for every platform.
+
+BANKMASTER is built with the JUCE framework (https://juce.com), used under the JUCE
+licence terms. VST is a trademark of Steinberg Media Technologies GmbH. Audio Units is
+a trademark of Apple Inc. FabFilter, Pro-Q, Saturn, Pro-C and Pro-L are trademarks of
+FabFilter B.V.; BANKMASTER is not affiliated with FabFilter and contains no FabFilter
+code - all DSP is an independent implementation.

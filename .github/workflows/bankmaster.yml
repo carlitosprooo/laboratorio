@@ -1,0 +1,154 @@
+name: BANKMASTER build, test & validate
+
+on:
+  push:
+    paths:
+      - "BANKMASTER/**"
+      - ".github/workflows/bankmaster.yml"
+  pull_request:
+    paths:
+      - "BANKMASTER/**"
+  workflow_dispatch:
+
+env:
+  PLUGINVAL_VERSION: v1.0.4
+
+jobs:
+  macos-universal:
+    name: macOS universal (arm64 + x86_64) - VST3 / AU / Standalone + installer
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (universal)
+        run: cmake -S BANKMASTER -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
+
+      - name: Build
+        run: cmake --build build --config Release -j 3
+
+      - name: Architectures (lipo)
+        run: |
+          ART=build/BankMaster_artefacts/Release
+          lipo -info "$ART/VST3/BANKMASTER.vst3/Contents/MacOS/BANKMASTER" | tee lipo.txt
+          lipo -info "$ART/AU/BANKMASTER.component/Contents/MacOS/BANKMASTER" | tee -a lipo.txt
+          lipo -info "$ART/Standalone/BANKMASTER.app/Contents/MacOS/BANKMASTER" | tee -a lipo.txt
+          lipo -info build/bankmaster_dsp_tests | tee -a lipo.txt
+          grep -c "x86_64 arm64\|arm64 x86_64" lipo.txt
+
+      - name: DSP tests (arm64, native)
+        run: ./build/bankmaster_dsp_tests | tee dsp_tests_macos_arm64.txt
+
+      - name: DSP tests (x86_64 slice under Rosetta 2)
+        run: |
+          softwareupdate --install-rosetta --agree-to-license >/dev/null 2>&1 || true
+          arch -x86_64 ./build/bankmaster_dsp_tests | tee dsp_tests_macos_x86_64.txt
+
+      - name: Plugin tests (state, presets, A/B, undo, automation, editor snapshots)
+        run: |
+          mkdir -p snapshots
+          ./build/bankmaster_plugin_tests_artefacts/Release/bankmaster_plugin_tests --snapshot snapshots | tee plugin_tests_macos.txt
+
+      - name: Audio Unit validation (auval, arm64 + x86_64)
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build/BankMaster_artefacts/Release/AU/BANKMASTER.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 3
+          auval -a | grep -i kalox || true
+          auval -strict -v aufx Bkms Klox | tee auval_arm64.txt
+          arch -x86_64 auval -strict -v aufx Bkms Klox | tee auval_x86_64.txt
+          grep -q "AU VALIDATION SUCCEEDED" auval_arm64.txt
+          grep -q "AU VALIDATION SUCCEEDED" auval_x86_64.txt
+
+      - name: pluginval (VST3 + AU, strictness 10)
+        run: |
+          curl -sSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/pluginval_macOS.zip"
+          unzip -q pluginval.zip
+          PV=./pluginval.app/Contents/MacOS/pluginval
+          $PV --strictness-level 10 --validate-in-process --timeout-ms 600000 --validate build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3 | tee pluginval_macos_vst3.txt
+          $PV --strictness-level 10 --validate-in-process --timeout-ms 600000 --validate ~/Library/Audio/Plug-Ins/Components/BANKMASTER.component | tee pluginval_macos_au.txt
+
+      - name: Build installer (.pkg)
+        run: |
+          BANKMASTER/installer/macos/build_pkg.sh "$PWD/build/BankMaster_artefacts/Release"
+          pkgutil --payload-files BANKMASTER/dist/*.pkg | head -50 || true
+          ls -la BANKMASTER/dist
+
+      - name: Package bundles
+        run: |
+          cd build/BankMaster_artefacts/Release
+          ditto -c -k --keepParent VST3/BANKMASTER.vst3 "$GITHUB_WORKSPACE/BANKMASTER-VST3-macOS-universal.zip"
+          ditto -c -k --keepParent AU/BANKMASTER.component "$GITHUB_WORKSPACE/BANKMASTER-AU-macOS-universal.zip"
+          ditto -c -k --keepParent Standalone/BANKMASTER.app "$GITHUB_WORKSPACE/BANKMASTER-Standalone-macOS-universal.zip"
+
+      - name: Upload installer + bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: BANKMASTER-macOS-universal
+          path: |
+            BANKMASTER/dist/*.pkg
+            BANKMASTER-*-macOS-universal.zip
+
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BANKMASTER-macOS-validation-logs
+          path: |
+            *.txt
+            snapshots/*.png
+
+  linux:
+    name: Linux x86_64 - VST3 / Standalone
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev \
+            libxext-dev libxcomposite-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev xvfb
+      - name: Configure & build
+        run: |
+          cmake -S BANKMASTER -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j 4
+      - name: DSP tests
+        run: ./build/bankmaster_dsp_tests | tee dsp_tests_linux.txt
+      - name: Plugin tests
+        run: xvfb-run -a ./build/bankmaster_plugin_tests_artefacts/Release/bankmaster_plugin_tests | tee plugin_tests_linux.txt
+      - name: pluginval (VST3, strictness 10)
+        run: |
+          curl -sSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/pluginval_Linux.zip"
+          unzip -q pluginval.zip
+          xvfb-run -a ./pluginval --strictness-level 10 --validate-in-process --timeout-ms 600000 --validate build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3 | tee pluginval_linux.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BANKMASTER-linux
+          path: |
+            *.txt
+            build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3
+
+  windows:
+    name: Windows x64 - VST3 (portability check)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure & build
+        run: |
+          cmake -S BANKMASTER -B build -A x64
+          cmake --build build --config Release -j 4
+      - name: DSP tests
+        run: .\build\Release\bankmaster_dsp_tests.exe
+      - name: Plugin tests
+        run: .\build\bankmaster_plugin_tests_artefacts\Release\bankmaster_plugin_tests.exe
+      - name: pluginval (VST3, strictness 10)
+        shell: bash
+        run: |
+          curl -sSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/pluginval_Windows.zip"
+          unzip -q pluginval.zip
+          ./pluginval.exe --strictness-level 10 --validate-in-process --timeout-ms 600000 --validate build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BANKMASTER-windows-x64-VST3
+          path: build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3

@@ -1,0 +1,13 @@
+BANKMASTER by KALOX - 4-IN-1 MASTERING SUITE
+
+INPUT > EQ > SATURATION > COMPRESSOR > LIMITER > OUTPUT in a single plug-in.
+
+This installer adds only:
+  /Library/Audio/Plug-Ins/VST3/BANKMASTER.vst3
+  /Library/Audio/Plug-Ins/Components/BANKMASTER.component
+  /Applications/BANKMASTER.app   (optional standalone)
+
+Universal binaries: Apple Silicon (arm64) and Intel (x86_64), macOS 10.15 or later.
+No other plug-ins are modified. Choose "Customize" to select the formats.
+
+After installing, rescan plug-ins in your DAW (Ableton Live: Settings > Plug-Ins > Rescan).

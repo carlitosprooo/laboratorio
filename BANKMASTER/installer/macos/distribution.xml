@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>BANKMASTER by KALOX @VERSION@</title>
+    <welcome file="welcome.txt"/>
+    <license file="license.txt"/>
+    <options customize="always" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <domains enable_localSystem="true"/>
+    <os-version min="10.15"/>
+    <choices-outline>
+        <line choice="vst3"/>
+        <line choice="au"/>
+        <line choice="app"/>
+    </choices-outline>
+    <choice id="vst3" title="VST3 plug-in" description="/Library/Audio/Plug-Ins/VST3/BANKMASTER.vst3 (Ableton Live, Cubase, Studio One, ...)">
+        <pkg-ref id="com.kalox.bankmaster.vst3"/>
+    </choice>
+    <choice id="au" title="Audio Unit plug-in" description="/Library/Audio/Plug-Ins/Components/BANKMASTER.component (Logic Pro, Ableton Live, ...)">
+        <pkg-ref id="com.kalox.bankmaster.au"/>
+    </choice>
+    <choice id="app" title="Standalone application" description="/Applications/BANKMASTER.app">
+        <pkg-ref id="com.kalox.bankmaster.app"/>
+    </choice>
+    <pkg-ref id="com.kalox.bankmaster.vst3" version="@VERSION@" onConclusion="none">BANKMASTER-VST3.pkg</pkg-ref>
+    <pkg-ref id="com.kalox.bankmaster.au" version="@VERSION@" onConclusion="none">BANKMASTER-AU.pkg</pkg-ref>
+    <pkg-ref id="com.kalox.bankmaster.app" version="@VERSION@" onConclusion="none">BANKMASTER-App.pkg</pkg-ref>
+</installer-gui-script>
