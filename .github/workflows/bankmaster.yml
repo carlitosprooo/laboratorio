@@ -131,7 +131,10 @@ jobs:
           (codesign -dv "$DMG" || true) 2>&1 | tee -a $R
 
           rm -rf ~/Library/Audio/Plug-Ins/Components/BANKMASTER.component   # copy used by the auval step
-          snap() { find /Library/Audio/Plug-Ins /Applications ~/Library/Audio/Plug-Ins -maxdepth 2 2>/dev/null | sort; }
+          # standard shared plug-in folders may be created by the installer when missing and are
+          # intentionally never deleted by the uninstaller -> excluded from the comparison
+          snap() { find /Library/Audio/Plug-Ins /Applications ~/Library/Audio/Plug-Ins -maxdepth 2 2>/dev/null \
+                     | grep -v -x -e /Library/Audio/Plug-Ins/VST3 -e /Library/Audio/Plug-Ins/Components | sort; }
           snap > before.txt
           echo "== install (sudo installer, default choices = VST3 + AU + Standalone)" | tee -a $R
           sudo installer -pkg "$MNT/Install BANKMASTER.pkg" -target / 2>&1 | tee -a $R
