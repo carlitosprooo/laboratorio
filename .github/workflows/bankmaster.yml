@@ -12,11 +12,16 @@ on:
 
 env:
   PLUGINVAL_VERSION: v1.0.4
+  VST3SDK_TAG: v3.7.12_build_20
+  VST3SDK_OPTS: -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=ON -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF -DSMTG_RUN_VST_VALIDATOR=OFF
 
 jobs:
   macos-universal:
     name: macOS universal (arm64 + x86_64) - VST3 / AU / Standalone + installer
     runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash   # bash -eo pipefail: a failing test can never hide behind "| tee"
     steps:
       - uses: actions/checkout@v4
 
@@ -68,11 +73,28 @@ jobs:
           $PV --strictness-level 10 --validate-in-process --timeout-ms 600000 --validate build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3 | tee pluginval_macos_vst3.txt
           $PV --strictness-level 10 --validate-in-process --timeout-ms 600000 --validate ~/Library/Audio/Plug-Ins/Components/BANKMASTER.component | tee pluginval_macos_au.txt
 
+      - name: Steinberg VST3 validator (official SDK, arm64 + x86_64)
+        run: |
+          git clone -q --depth 1 --branch "$VST3SDK_TAG" --recurse-submodules --shallow-submodules https://github.com/steinbergmedia/vst3sdk.git vst3sdk
+          cmake -S vst3sdk -B vst3build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" $VST3SDK_OPTS
+          cmake --build vst3build --config Release --target validator -j 3
+          V=$(find vst3build -type f -name validator -perm -u+x | head -1)
+          lipo -info "$V"
+          "$V" build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3 | tee steinberg_validator_macos_arm64.txt
+          arch -x86_64 "$V" build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3 | tee steinberg_validator_macos_x86_64.txt
+          grep -q " 0 tests failed" steinberg_validator_macos_arm64.txt
+          grep -q " 0 tests failed" steinberg_validator_macos_x86_64.txt
+
       - name: Build installer (.pkg)
         run: |
           BANKMASTER/installer/macos/build_pkg.sh "$PWD/build/BankMaster_artefacts/Release"
-          pkgutil --payload-files BANKMASTER/dist/*.pkg | head -50 || true
           ls -la BANKMASTER/dist
+          # inspect the product: component packages and payloads
+          pkgutil --expand BANKMASTER/dist/*.pkg pkg-expanded
+          ls pkg-expanded | tee pkg_contents.txt
+          for c in pkg-expanded/*.pkg; do echo "== $c"; tar -tzf "$c/Payload" 2>/dev/null | grep -E "MacOS/BANKMASTER$|Info.plist$" ; done | tee -a pkg_contents.txt
+          grep -q "BANKMASTER.vst3/Contents/MacOS/BANKMASTER" pkg_contents.txt
+          grep -q "BANKMASTER.component/Contents/MacOS/BANKMASTER" pkg_contents.txt
 
       - name: Package bundles
         run: |
@@ -101,13 +123,17 @@ jobs:
   linux:
     name: Linux x86_64 - VST3 / Standalone
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash   # bash -eo pipefail
     steps:
       - uses: actions/checkout@v4
       - name: Dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ninja-build libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev \
-            libxext-dev libxcomposite-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev xvfb
+            libxext-dev libxcomposite-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev xvfb \
+            libgtkmm-3.0-dev libxcb-util-dev libxcb-cursor-dev libxcb-keysyms1-dev libxcb-xkb-dev libxkbcommon-x11-dev
       - name: Configure & build
         run: |
           cmake -S BANKMASTER -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -121,6 +147,13 @@ jobs:
           curl -sSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/pluginval_Linux.zip"
           unzip -q pluginval.zip
           xvfb-run -a ./pluginval --strictness-level 10 --validate-in-process --timeout-ms 600000 --validate build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3 | tee pluginval_linux.txt
+      - name: Steinberg VST3 validator (official SDK)
+        run: |
+          git clone -q --depth 1 --branch "$VST3SDK_TAG" --recurse-submodules --shallow-submodules https://github.com/steinbergmedia/vst3sdk.git vst3sdk
+          cmake -S vst3sdk -B vst3build -G Ninja -DCMAKE_BUILD_TYPE=Release $VST3SDK_OPTS
+          cmake --build vst3build --target validator -j 4
+          xvfb-run -a vst3build/bin/Release/validator build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3 | tee steinberg_validator_linux.txt
+          grep -q " 0 tests failed" steinberg_validator_linux.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -148,6 +181,14 @@ jobs:
           curl -sSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/pluginval_Windows.zip"
           unzip -q pluginval.zip
           ./pluginval.exe --strictness-level 10 --validate-in-process --timeout-ms 600000 --validate build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3
+      - name: Steinberg VST3 validator (official SDK)
+        shell: bash
+        run: |
+          git clone -q --depth 1 --branch "$VST3SDK_TAG" --recurse-submodules --shallow-submodules https://github.com/steinbergmedia/vst3sdk.git vst3sdk
+          cmake -S vst3sdk -B vst3build -A x64 $VST3SDK_OPTS
+          cmake --build vst3build --config Release --target validator -j 4
+          ./vst3build/bin/Release/validator.exe build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3 | tee steinberg_validator_windows.txt
+          grep -q " 0 tests failed" steinberg_validator_windows.txt
       - uses: actions/upload-artifact@v4
         with:
           name: BANKMASTER-windows-x64-VST3

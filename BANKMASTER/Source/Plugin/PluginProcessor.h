@@ -42,6 +42,12 @@ public:
     // ---- editor access
     juce::AudioProcessorValueTreeState& getState() noexcept { return state; }
     juce::UndoManager& getUndoManager() noexcept { return undoManager; }
+    /** Undo helpers. APVTS copies parameter changes into its ValueTree (where undo is
+        recorded) from an adaptive timer of up to ~500 ms; copyState() flushes that
+        immediately, so each transaction contains exactly the edits made before it. */
+    void beginUndoTransaction (const juce::String& name = {}) { state.copyState(); undoManager.beginNewTransaction (name); }
+    void undo() { state.copyState(); undoManager.undo(); }
+    void redo() { state.copyState(); undoManager.redo(); }
     PresetManager& getPresets() noexcept { return presets; }
     bm::MasterChain& getChain() noexcept { return chain; }
     double getCurrentSampleRate() const noexcept { return currentRate; }

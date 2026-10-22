@@ -255,24 +255,21 @@ int main (int argc, char** argv)
         p.selectAbSlot (0);
         PCHECK (std::abs (getParam (p, bmp::id::limGain) - 9.0f) < 1e-3f);
 
-        // APVTS copies parameter values into its ValueTree (where undo is recorded)
-        // from a message-thread timer, so the loop is pumped between edits
-        auto pump = [] { juce::MessageManager::getInstance()->runDispatchLoopUntil (120); };
+        // no message-loop pumping: the processor's undo helpers flush APVTS explicitly,
+        // so the grouping is deterministic on every platform
         auto& um = p.getUndoManager();
-        pump();
+        p.beginUndoTransaction();
         um.clearUndoHistory();
-        um.beginNewTransaction();
+        p.beginUndoTransaction();
         setParam (p, bmp::id::compThr, -24.0f);
-        pump();
-        um.beginNewTransaction();
+        p.beginUndoTransaction();
         setParam (p, bmp::id::compThr, -30.0f);
-        pump();
         PCHECK (um.canUndo());
-        um.undo();
+        p.undo();
         PCHECK (std::abs (getParam (p, bmp::id::compThr) + 24.0f) < 1e-3f);
-        um.undo();
+        p.undo();
         PCHECK (std::abs (getParam (p, bmp::id::compThr) + 18.0f) < 1e-3f);
-        um.redo();
+        p.redo();
         PCHECK (std::abs (getParam (p, bmp::id::compThr) + 24.0f) < 1e-3f);
     });
 

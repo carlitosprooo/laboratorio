@@ -28,10 +28,6 @@
 [ RUN  ] automation_from_another_thread_while_processing
 [  OK  ] automation_from_another_thread_while_processing
 [ RUN  ] editor_creation_and_snapshots
-    | snapshot /home/user/laboratorio/BANKMASTER/docs/screenshots/bankmaster_eq.png
-    | snapshot /home/user/laboratorio/BANKMASTER/docs/screenshots/bankmaster_saturation.png
-    | snapshot /home/user/laboratorio/BANKMASTER/docs/screenshots/bankmaster_compressor.png
-    | snapshot /home/user/laboratorio/BANKMASTER/docs/screenshots/bankmaster_limiter.png
 [  OK  ] editor_creation_and_snapshots
 
-78 checks, 0 failures
+74 checks, 0 failures

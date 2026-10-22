@@ -21,7 +21,7 @@ BankMasterEditor::BankMasterEditor (BankMasterProcessor& p)
         const int idx = presetBox.getSelectedItemIndex();
         if (idx >= 0 && presetBox.getText() != proc.getPresets().getCurrentPresetName())
         {
-            proc.getUndoManager().beginNewTransaction ("Load preset");
+            proc.beginUndoTransaction ("Load preset");
             proc.getPresets().loadPreset (idx);
         }
     };
@@ -30,13 +30,13 @@ BankMasterEditor::BankMasterEditor (BankMasterProcessor& p)
     prevPreset.onClick = [this] {
         const int n = proc.getPresets().getAllPresetNames().size();
         const int i = proc.getPresets().getCurrentPresetIndex();
-        proc.getUndoManager().beginNewTransaction ("Load preset");
+        proc.beginUndoTransaction ("Load preset");
         proc.getPresets().loadPreset ((i - 1 + n) % n);
     };
     nextPreset.onClick = [this] {
         const int n = proc.getPresets().getAllPresetNames().size();
         const int i = proc.getPresets().getCurrentPresetIndex();
-        proc.getUndoManager().beginNewTransaction ("Load preset");
+        proc.beginUndoTransaction ("Load preset");
         proc.getPresets().loadPreset ((i + 1) % n);
     };
     savePreset.onClick = [this] { savePresetDialog(); };
@@ -47,8 +47,8 @@ BankMasterEditor::BankMasterEditor (BankMasterProcessor& p)
     abB.onClick = [this] { proc.selectAbSlot (1); };
     abCopy.setTooltip ("Copy the current slot to the other one");
     abCopy.onClick = [this] { proc.copyAbToOther(); };
-    undo.onClick = [this] { proc.getUndoManager().undo(); };
-    redo.onClick = [this] { proc.getUndoManager().redo(); };
+    undo.onClick = [this] { proc.undo(); };
+    redo.onClick = [this] { proc.redo(); };
 
     addAndMakeVisible (oneMaster);
     addAndMakeVisible (oneOn);
@@ -90,7 +90,7 @@ BankMasterEditor::~BankMasterEditor()
 
 void BankMasterEditor::mouseDown (const juce::MouseEvent&)
 {
-    proc.getUndoManager().beginNewTransaction();
+    proc.beginUndoTransaction();
 }
 
 void BankMasterEditor::showTab (int index)

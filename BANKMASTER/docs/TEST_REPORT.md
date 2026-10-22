@@ -2,7 +2,8 @@
 
 Logs completos: `docs/validation/`. Testes DSP: `Tests/DspTests.cpp` (19 testes, 133 verificações).
 Testes do plugin: `Tests/PluginTests.cpp` (10 testes, 78 verificações). Validação de formato: pluginval
-(nível de rigor 10, inclui o validador VST3 da Steinberg) e auval (CI macOS).
+(nível de rigor 10), validador VST3 oficial da Steinberg (`validator` compilado do VST3 SDK v3.7.12 — o
+pluginval sozinho NÃO o executa sem `--vst3validator`) e auval (CI macOS).
 
 Ambiente local: Linux x86_64, GCC 13.3, JUCE 8.0.4, build Release. Os sinais de teste são sintéticos
 (kick + baixo + hats filtrados + tons com picos inter-amostra) ou tons de referência EBU.
@@ -21,7 +22,7 @@ Ambiente local: Linux x86_64, GCC 13.3, JUCE 8.0.4, build Release. Os sinais de 
 | 10 | Bypass sem cliques | `bypass_toggles_are_click_free` | Pico da 2ª diferença em relação ao estado estacionário: master 1,00×, EQ 1,05×, SAT 1,10×, COMP 1,00×, LIM 1,00×; troca de oversampling/lookahead 1,21× (antes do declick: 2900×) |
 | 11 | Uso de CPU | `kalox_preset_processes_real_audio_and_cpu_budget` | Preset KALOX (sat 4× + limiter 16×), 1 núcleo do servidor de build: 44,1 kHz 12,6 %, 48 kHz 15,2 %, 96 kHz 22,5 % (limiter 8×). Em Apple Silicon espera-se menos; medir no Mac é pendência (ver abaixo) |
 | 12 | Intel e Apple Silicon | CI macOS: `lipo -info`, testes DSP nativos (arm64) e sob Rosetta (x86_64), auval nas duas arquiteturas | ver seção "CI macOS" |
-| 13 | Validação VST3 e AU | pluginval nível 10 (Linux VST3: SUCCESS), CI macOS: pluginval VST3 + AU e `auval -strict` | ver seção "CI macOS" |
+| 13 | Validação VST3 e AU | pluginval nível 10, validador Steinberg, `auval -strict` | Linux local: pluginval SUCCESS; Steinberg 47 aprovados / 0 falhas. macOS/Windows: ver seção "CI" |
 | 14 | Ausência de crashes e NaN/Inf | `nan_inf_and_extreme_inputs` | Silêncio, DC 0 dBFS, quadrada em Nyquist, NaN, Inf, +18 dBFS: saída finita e ≤ −0,1 dBFS; cadeia se recupera |
 | 15 | Comparação com a cadeia original | `bankmaster_render --compare` | **PENDENTE** — exige os renders da sua cadeia FabFilter (não disponível neste ambiente). Procedimento abaixo |
 
