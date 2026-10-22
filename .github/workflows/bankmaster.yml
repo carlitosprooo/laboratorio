@@ -96,6 +96,80 @@ jobs:
           grep -q "BANKMASTER.vst3/Contents/MacOS/BANKMASTER" pkg_contents.txt
           grep -q "BANKMASTER.component/Contents/MacOS/BANKMASTER" pkg_contents.txt
 
+      - name: Build DMG (dmgbuild, branded layout)
+        run: |
+          python3 -m venv dmgenv
+          dmgenv/bin/pip install -q dmgbuild
+          PATH="$PWD/dmgenv/bin:$PATH" BANKMASTER/installer/macos/dmg/build_dmg.sh "$PWD/BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-macOS-universal.pkg"
+          ls -la BANKMASTER/dist
+
+      - name: Verify DMG + real install / uninstall test
+        run: |
+          DMG=BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-macOS-Universal.dmg
+          PKG=BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-macOS-universal.pkg
+          R=dmg_test_report.txt
+          echo "== hdiutil verify" | tee $R
+          hdiutil verify "$DMG" 2>&1 | tee -a $R
+          hdiutil imageinfo "$DMG" | grep -E "^Format:|Format Description|Checksum Type|Checksum Value" | tee -a $R
+          ls -l "$DMG" | tee -a $R
+          MNT="$(mktemp -d)/BANKMASTER"
+          mkdir -p "$MNT"
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MNT" | tee -a $R
+          echo "== DMG contents" | tee -a $R
+          ls -la "$MNT" | tee -a $R
+          test -f "$MNT/.DS_Store" && test -f "$MNT/.VolumeIcon.icns" && ls "$MNT/.background" | tee -a $R
+          cmp "$MNT/Install BANKMASTER.pkg" "$PKG"
+          echo "pkg inside the DMG is byte-identical to the validated pkg ($(shasum -a 256 "$PKG" | cut -c1-16)...)" | tee -a $R
+          echo "== signatures" | tee -a $R
+          (pkgutil --check-signature "$MNT/Install BANKMASTER.pkg" || true) 2>&1 | tee -a $R
+          (codesign -dv "$DMG" || true) 2>&1 | tee -a $R
+
+          rm -rf ~/Library/Audio/Plug-Ins/Components/BANKMASTER.component   # copy used by the auval step
+          snap() { find /Library/Audio/Plug-Ins /Applications ~/Library/Audio/Plug-Ins -maxdepth 2 2>/dev/null | sort; }
+          snap > before.txt
+          echo "== install (sudo installer, default choices = VST3 + AU + Standalone)" | tee -a $R
+          sudo installer -pkg "$MNT/Install BANKMASTER.pkg" -target / 2>&1 | tee -a $R
+          snap > after_install.txt
+          (diff before.txt after_install.txt || true) | tee install_diff.txt | tee -a $R
+          if grep '^>' install_diff.txt | grep -v 'BANKMASTER'; then echo "unexpected files installed"; exit 1; fi
+          grep -q '^> /Library/Audio/Plug-Ins/VST3/BANKMASTER.vst3$' install_diff.txt
+          grep -q '^> /Library/Audio/Plug-Ins/Components/BANKMASTER.component$' install_diff.txt
+          grep -q '^> /Applications/BANKMASTER.app$' install_diff.txt
+          if grep '^<' install_diff.txt; then echo "installer removed something"; exit 1; fi
+          lipo -info /Library/Audio/Plug-Ins/VST3/BANKMASTER.vst3/Contents/MacOS/BANKMASTER | tee -a $R
+          lipo -info /Library/Audio/Plug-Ins/Components/BANKMASTER.component/Contents/MacOS/BANKMASTER | tee -a $R
+          lipo -info /Applications/BANKMASTER.app/Contents/MacOS/BANKMASTER | tee -a $R
+          pkgutil --pkgs | grep com.kalox.bankmaster | tee -a $R
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 3
+          echo "== auval on the INSTALLED component (arm64 + x86_64)" | tee -a $R
+          auval -strict -v aufx Bkms Klox > auval_installed_arm64.txt
+          arch -x86_64 auval -strict -v aufx Bkms Klox > auval_installed_x86_64.txt
+          grep "AU VALIDATION SUCCEEDED" auval_installed_arm64.txt | tee -a $R
+          grep "AU VALIDATION SUCCEEDED" auval_installed_x86_64.txt | tee -a $R
+          echo "== Steinberg validator on the INSTALLED VST3" | tee -a $R
+          V=$(find vst3build -type f -name validator -perm -u+x | head -1)
+          "$V" /Library/Audio/Plug-Ins/VST3/BANKMASTER.vst3 > steinberg_installed.txt
+          grep "Result:" steinberg_installed.txt | tee -a $R
+          grep -q " 0 tests failed" steinberg_installed.txt
+
+          echo "== uninstall with the DMG's uninstaller" | tee -a $R
+          "$MNT/Uninstall BANKMASTER.command" --yes 2>&1 | tee -a $R
+          snap > after_uninstall.txt
+          diff before.txt after_uninstall.txt
+          echo "file system identical to the state before installation" | tee -a $R
+          test "$(pkgutil --pkgs | grep -c com.kalox.bankmaster || true)" = "0"
+          echo "installer receipts removed" | tee -a $R
+          hdiutil detach "$MNT"
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: BANKMASTER-by-KALOX-1.0.0-macOS-Universal-DMG
+          path: |
+            BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-macOS-Universal.dmg
+            BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-macOS-Universal.dmg.sha256
+
       - name: Package bundles
         run: |
           cd build/BankMaster_artefacts/Release
@@ -119,6 +193,7 @@ jobs:
           path: |
             *.txt
             snapshots/*.png
+            install_diff.txt
 
   linux:
     name: Linux x86_64 - VST3 / Standalone
@@ -188,7 +263,83 @@ jobs:
           cmake -S vst3sdk -B vst3build -A x64 $VST3SDK_OPTS
           cmake --build vst3build --config Release --target validator -j 4
           ./vst3build/bin/Release/validator.exe build/BankMaster_artefacts/Release/VST3/BANKMASTER.vst3 | tee steinberg_validator_windows.txt
+          ls -la build/BankMaster_artefacts/Release/Standalone
           grep -q " 0 tests failed" steinberg_validator_windows.txt
+      - name: Build installer (Inno Setup)
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          if (-not (Test-Path $iscc)) { $iscc = (Get-Command iscc.exe).Source }
+          & $iscc "/DArtefacts=$pwd\build\BankMaster_artefacts\Release" "/DOutDir=$pwd\BANKMASTER\dist" BANKMASTER\installer\windows\BANKMASTER.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Verify installer + real install / uninstall test
+        run: |
+          $ErrorActionPreference = "Stop"
+          $R = "win_installer_report.txt"
+          $exe = Get-Item "BANKMASTER\dist\BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup.exe"
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($exe.Name)" | Out-File -Encoding ascii "$($exe.FullName).sha256"
+          "Installer: $($exe.Name)  size $($exe.Length) bytes  sha256 $hash" | Tee-Object -FilePath $R
+          "Authenticode: $((Get-AuthenticodeSignature $exe.FullName).Status)" | Tee-Object -FilePath $R -Append
+          $exe.VersionInfo | Format-List ProductName,ProductVersion,CompanyName,FileDescription | Out-String | Tee-Object -FilePath $R -Append
+
+          $vst = Join-Path $env:CommonProgramFiles "VST3"
+          $app = Join-Path $env:ProgramFiles "KALOX\BANKMASTER"
+          function Snap { @("<snapshot>") + @(Get-ChildItem $vst, (Join-Path $env:ProgramFiles "KALOX") -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object FullName | Sort-Object) }
+          $before = Snap
+          "== silent install (components vst3,standalone)" | Tee-Object -FilePath $R -Append
+          $p = Start-Process $exe.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/COMPONENTS=vst3,standalone',"/LOG=$pwd\install.log" -Wait -PassThru
+          "setup exit code: $($p.ExitCode)" | Tee-Object -FilePath $R -Append
+          if ($p.ExitCode -ne 0) { exit 1 }
+          $after = Snap
+          $added = @(Compare-Object $before $after | Where-Object SideIndicator -eq '=>' | ForEach-Object InputObject)
+          "files added:" | Tee-Object -FilePath $R -Append
+          $added | Tee-Object -FilePath $R -Append
+          $unexpected = @($added | Where-Object { $_ -notlike "$vst\BANKMASTER.vst3*" -and $_ -notlike "$app*" -and $_ -ne (Join-Path $env:ProgramFiles "KALOX") })
+          if ($unexpected.Count -gt 0) { "unexpected files: $unexpected"; exit 1 }
+          if (-not (Test-Path "$vst\BANKMASTER.vst3\Contents\x86_64-win\BANKMASTER.vst3")) { "VST3 missing"; exit 1 }
+          if (-not (Test-Path "$app\BANKMASTER.exe")) { "Standalone missing"; exit 1 }
+          if (-not (Test-Path "$app\unins000.exe")) { "uninstaller missing"; exit 1 }
+          $key = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{951C821C-D559-4BEF-BC26-6822C33BB554}_is1"
+          Get-ItemProperty $key | Format-List DisplayName,DisplayVersion,Publisher,InstallLocation,UninstallString,DisplayIcon | Out-String | Tee-Object -FilePath $R -Append
+          Get-ItemProperty "HKLM:\SOFTWARE\KALOX\BANKMASTER" | Format-List Version,InstallDir,VST3Path | Out-String | Tee-Object -FilePath $R -Append
+
+          "== Steinberg validator on the INSTALLED VST3" | Tee-Object -FilePath $R -Append
+          $val = & .\vst3build\bin\Release\validator.exe "$vst\BANKMASTER.vst3" 2>&1 | Out-String
+          $val | Out-File steinberg_installed_windows.txt
+          ($val -split "`n" | Select-String "Result:") | Out-String | Tee-Object -FilePath $R -Append
+          if ($val -notmatch " 0 tests failed") { exit 1 }
+
+          "== silent uninstall" | Tee-Object -FilePath $R -Append
+          $u = Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          "uninstaller exit code: $($u.ExitCode)" | Tee-Object -FilePath $R -Append
+          for ($i = 0; $i -lt 60 -and ((Test-Path "$vst\BANKMASTER.vst3") -or (Test-Path $app)); $i++) { Start-Sleep 1 }
+          $final = Snap
+          $diff = @(Compare-Object $before $final)
+          if ($diff.Count -gt 0) { "file system differs after uninstall:"; $diff; exit 1 }
+          "file system identical to the state before installation" | Tee-Object -FilePath $R -Append
+          if (Test-Path $key) { "uninstall registry key still present"; exit 1 }
+          if (Test-Path "HKLM:\SOFTWARE\KALOX\BANKMASTER") { "KALOX\BANKMASTER registry key still present"; exit 1 }
+          "registry entries removed" | Tee-Object -FilePath $R -Append
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup
+          path: |
+            BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup.exe
+            BANKMASTER/dist/BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup.exe.sha256
+
+      - name: Upload Windows validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BANKMASTER-Windows-validation-logs
+          path: |
+            *.txt
+            install.log
+
       - uses: actions/upload-artifact@v4
         with:
           name: BANKMASTER-windows-x64-VST3
