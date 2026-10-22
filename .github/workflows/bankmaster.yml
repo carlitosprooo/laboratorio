@@ -16,7 +16,7 @@ env:
 jobs:
   macos-universal:
     name: macOS universal (arm64 + x86_64) - VST3 / AU / Standalone + installer
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
