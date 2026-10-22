@@ -3,6 +3,28 @@
 Gerados e testados pelo GitHub Actions (`.github/workflows/bankmaster.yml`) em máquinas limpas,
 sem nenhum plugin FabFilter. DSP, presets e código do plugin são os mesmos já validados.
 
+## Downloads — run #8 (https://github.com/carlitosprooo/laboratorio/actions/runs/39829983406)
+
+| Instalador | Tamanho | SHA-256 | Artefato |
+|---|---|---|---|
+| `BANKMASTER-by-KALOX-1.0.0-macOS-Universal.dmg` | 11.385.637 bytes (10,9 MB) | `4aed11c8b6eb31c190e41b2d0de130d525d6788b6defa790d2c15b85f727193d` | https://github.com/carlitosprooo/laboratorio/actions/runs/39829983406/artifacts/12448568065 |
+| `BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup.exe` | 4.922.364 bytes (4,7 MB) | `560dc5c17e8a41763dd28633f2ad56ec7bb787c40832d8beb0f8bc0c022d733c` | https://github.com/carlitosprooo/laboratorio/actions/runs/39829983406/artifacts/12449780076 |
+
+Logs: macOS https://github.com/carlitosprooo/laboratorio/actions/runs/39829983406/artifacts/12448738045 ·
+Windows https://github.com/carlitosprooo/laboratorio/actions/runs/39829983406/artifacts/12449246997
+(os artefatos chegam como .zip contendo o instalador e o arquivo `.sha256`; expiram em 20/01/2027; download exige login no GitHub).
+
+Resultado medido no run #8 — macOS: `hdiutil verify` VALID (UDZO); `.pkg` interno idêntico ao validado;
+instalação real adicionou exatamente `/Applications/BANKMASTER.app`, `/Library/Audio/Plug-Ins/Components/BANKMASTER.component`
+e `/Library/Audio/Plug-Ins/VST3/BANKMASTER.vst3` (todos `x86_64 arm64`); auval no componente instalado SUCCEEDED
+(arm64 e x86_64); validador Steinberg no VST3 instalado 47/0; desinstalador → sistema idêntico ao inicial, recibos removidos.
+Windows: instalação silenciosa código 0; somente o bundle VST3 e `Program Files\KALOX\BANKMASTER`
+(exe, ícone, Read Me, desinstalador); registro OK; validador Steinberg no VST3 instalado 47/0; desinstalação
+código 0 → sistema idêntico ao inicial, chaves de registro removidas.
+
+Correções feitas durante esta validação: bundles do `.pkg` marcados como não-relocáveis (antes o macOS
+Installer podia atualizar uma cópia do app encontrada em outra pasta em vez de instalar em `/Applications`).
+
 ## macOS — `BANKMASTER-by-KALOX-1.0.0-macOS-Universal.dmg`
 
 | | |

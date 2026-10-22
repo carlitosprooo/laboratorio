@@ -57,6 +57,11 @@ Build OK · testes DSP e de plugin sem falhas · pluginval nível 10 SUCCESS · 
 Download: página do run → seção **Artifacts** (exige login no GitHub).
 
 
+## 2b. Instaladores oficiais (run #8)
+
+DMG macOS Universal e Setup.exe Windows x64 gerados, instalados, validados no local instalado e desinstalados
+no CI — detalhes, tamanhos, SHA-256 e links em `docs/INSTALLERS.md`. Nenhum dos dois tem assinatura digital.
+
 ## 3. Validação local (Linux x86_64, este ambiente)
 
 | Verificação | Resultado | Evidência |
