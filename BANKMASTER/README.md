@@ -15,9 +15,19 @@ e não depende de plugins FabFilter instalados.
 |---|---|---|
 | ![](docs/screenshots/bankmaster_saturation.png) | ![](docs/screenshots/bankmaster_compressor.png) | ![](docs/screenshots/bankmaster_limiter.png) |
 
+## Instaladores
+
+| Plataforma | Arquivo | Conteúdo |
+|---|---|---|
+| macOS Universal (arm64 + x86_64) | `BANKMASTER-by-KALOX-1.0.0-macOS-Universal.dmg` | instalador guiado (.pkg) VST3 / AU / Standalone, Read Me, desinstalador |
+| Windows 10/11 x64 | `BANKMASTER-by-KALOX-1.0.0-Windows-x64-Setup.exe` | assistente gráfico: VST3 / Standalone, desinstalador |
+
+Gerados e testados (instalação + desinstalação reais) pelo GitHub Actions. Ainda **sem assinatura digital**
+— detalhes em `docs/INSTALLERS.md`.
+
 ## Uso rápido (Ableton Live 12)
 
-1. Instale o `.pkg` (escolha VST3 e/ou AU) e faça *Rescan* dos plugins.
+1. Instale pelo DMG (macOS) ou Setup.exe (Windows) e faça *Rescan* dos plugins.
 2. Coloque **uma instância** de BANKMASTER na Master. Ela abre no preset **KALOX MASTER - ORIGINAL**.
 3. Toque o trecho mais alto da música, clique **LEARN** (painel INPUT), espere alguns segundos e clique de
    novo: o ganho de entrada é ajustado para que a mix chegue à cadeia em −20 LUFS — o preset se comporta
@@ -69,6 +79,7 @@ Render/comparação offline: `bankmaster_render --help`.
 - `docs/ARCHITECTURE.md` — DSP, tempo real, latência, estrutura de arquivos
 - `docs/TEST_REPORT.md` — os 15 testes exigidos com resultados medidos
 - `docs/FINAL_REPORT.md` — relatório final (arquivos, testes, limitações, pendências)
+- `docs/INSTALLERS.md` — instaladores DMG / EXE, testes de instalação, assinatura
 
 ## Licenças
 
