@@ -49,8 +49,11 @@ nonrelocatable() {
   local n i
   n=$(/usr/libexec/PlistBuddy -c "Print" "$2" | grep -c "RootRelativeBundlePath" || true)
   for ((i = 0; i < n; i++)); do
-    /usr/libexec/PlistBuddy -c "Set :$i:BundleIsRelocatable false" "$2"
+    # the key is only present for some bundle types: delete if present, then add explicitly
+    /usr/libexec/PlistBuddy -c "Delete :$i:BundleIsRelocatable" "$2" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Add :$i:BundleIsRelocatable bool false" "$2"
   done
+  echo "component plist $(basename "$2"): $n bundle(s), BundleIsRelocatable=false"
 }
 nonrelocatable "$WORK/vst3" "$WORK/vst3.plist"
 nonrelocatable "$WORK/au" "$WORK/au.plist"
