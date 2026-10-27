@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# KaloxSooth / SootheKalox — o que NÃO vai para o repositório.
+# Nada aqui é apagado do disco; só fica fora do git.
+# ---------------------------------------------------------------------------
+
+# Saídas de build (geradas localmente ou no CI)
+build/
+build-*/
+cmake-build-*/
+
+# JUCE é clonado no CI (tag 8.0.16-security)
+ThirdParty/JUCE/
+
+# Pacotes de distribuição (gerados pelo CI)
+Distribution/
+
+# macOS / exFAT (AppleDouble e metadados)
+._*
+.DS_Store
+.AppleDouble
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# IDEs e arquivos locais
+.vs/
+.idea/
+xcuserdata/
+*.xcuserstate
+CMakeUserPresets.json
+
+# Backups e temporários
+*.bak
+*.orig
+*.tmp
+*~
+
+# Áudio grande (setup_repo_mac.sh lista os .wav > 10 MB e pode acrescentá-los abaixo)
