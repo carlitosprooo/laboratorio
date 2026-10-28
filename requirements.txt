@@ -1,0 +1,7 @@
+# Local (non-Colab) install. In Colab, the notebook installs these itself and keeps Colab's torch.
+# Install a CUDA build of torch/torchaudio first (see https://pytorch.org/get-started/locally/).
+omnivoice @ git+https://github.com/k2-fsa/OmniVoice.git@08be0b4ccbac3e13e374e86fbfead4b4cac343e2
+gradio==5.49.1
+# optional: text normalization (numbers/dates) for the "Normalize text" checkbox
+WeTextProcessing
+num2words

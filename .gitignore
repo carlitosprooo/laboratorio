@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+voice_studio_data/
+voice_studio_app/
+tiny_omnivoice/

@@ -1,0 +1,52 @@
+/* VOICE STUDIO DA GALAXIA — layer on top of gr.themes.Soft (dark).
+   Palette measured on the reference screenshots:
+   page #0b0f19 · panels #1f2937 · inputs #374151 · purple #4f46e5 · secondary #4b5563 */
+
+/* ---------- header ---------- */
+.gradio-container { max-width: 1240px !important; margin-left: auto !important; margin-right: auto !important; }
+#vs-header { text-align: center; padding: 10px 0 6px; }
+#vs-header h1 {
+  font-size: 37px !important;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 6px;
+  color: #ffffff;
+}
+#vs-header .vs-subtitle { margin: 0 0 9px; font-size: 16.8px; color: #d1d5db; }
+#vs-header .vs-badge {
+  display: inline-block;
+  padding: 3px 14px;
+  border: 1px solid #6b7280;
+  border-radius: 999px;
+  font-size: 16.8px;
+  color: #f3f4f6;
+}
+
+/* ---------- left column ---------- */
+#vs-text textarea { min-height: 250px; }
+#vs-counter { padding: 2px 0; }
+#vs-counter p { font-weight: 700; margin: 0; }
+#vs-insert { align-self: flex-start; min-height: 40px; font-size: 1.1em; }
+
+.vs-section-title { padding: 2px 0 2px 0 !important; }
+.vs-section-title h3 { margin: 0 !important; font-size: 1.2em !important; }
+
+#vs-voice-status h3 { margin: 4px 0 10px !important; font-size: 1.2em !important; }
+#vs-voice-status p { margin: 6px 0; }
+
+/* ---------- right column ---------- */
+#vs-output-title h3, .vs-section-title h3 { font-weight: 700; }
+#vs-status h3 { margin: 6px 0 14px !important; font-size: 1.2em !important; }
+#vs-status p, #vs-tip p { line-height: 1.6; }
+
+/* ---------- action row ---------- */
+#vs-generate { min-height: 54px; font-size: 1.25em !important; }
+#vs-clear { align-self: flex-start; min-height: 40px; font-size: 1.15em !important; }
+
+#vs-footer p { margin: 8px 0 14px; }
+
+/* compact numeric box next to slider labels, as in the reference */
+.gradio-container .tab-like-container input[type="number"] { width: 58px !important; }
+
+/* file size in the Download WAV row: muted text, as in the reference */
+#vs-file-out a { color: #9ca3af !important; text-decoration: none !important; }
