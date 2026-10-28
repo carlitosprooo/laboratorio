@@ -74,8 +74,8 @@ const assert = (c, m) => { if (!c) { console.log('FAIL:', m); process.exitCode =
   await page.locator('#vs-file-out a').first().click();
   const d = await dl;
   assert((await d.suggestedFilename()).match(/^omnivoice_turbo_[0-9a-f]{7}\.wav$/), 'download WAV: ' + await d.suggestedFilename());
-  await d.saveAs('downloaded.wav');
-  await page.screenshot({ path: 'shots5/after_gen.png' });
+  await d.saveAs(require('path').join(require('os').tmpdir(), 'vs_e2e_download.wav'));
+  await page.screenshot({ path: require('path').join(require('os').tmpdir(), 'vs_e2e_after_generation.png') });
 
   // voice design via dropdowns
   await page.getByText('Voice Design', { exact: true }).first().click();
